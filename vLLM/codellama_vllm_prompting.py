@@ -22,47 +22,53 @@ if __name__ == '__main__':
 
     prob_lo, prob_hi = 0, 164
 
-    if to_gen_tests:
-        prompts = []
-        for i, task_id in enumerate(problems):                
-            prefix = "# Write test cases for the following function.\n"
-            suffix = "    pass\n\nassert"
-            prompt = prefix + problems[task_id]["prompt"] + suffix
-            prompts.append(prompt)
+    task_id = 'HumanEval/0'
+    prefix = "# Write test cases for the following function.\n"
+    suffix = "    pass\n\nassert"
+    prompt = prefix + problems[task_id]["prompt"] + suffix
+    prompts = [prompt]
+    responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
+
+    # if to_gen_tests:
+    #     res = []
+    #     for i, task_id in enumerate(problems):                
+    #         prefix = "# Write test cases for the following function.\n"
+    #         suffix = "    pass\n\nassert"
+    #         prompt = prefix + problems[task_id]["prompt"] + suffix
+    #         prompts = [prompt]
         
-        responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
+    #         responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
 
-        res = []
-        for i, task_id in enumerate(problems):    
-            for j in range(len(responses[i])):
-                prompt = problems[task_id]["prompt"]
-                gen_code = prompt + responses[i][j]
-                gen_test = extract_testcase(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[i][j]})
+    #         for j in range(len(responses[0])):
+    #             prompt = problems[task_id]["prompt"]
+    #             gen_code = prompt + responses[0][j]
+    #             gen_test = extract_testcase(gen_code)
+    #             res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[0][j]})
 
-        write_jsonl("codellama_humaneval_tests_k%d_%d-%d_with_probs.jsonl" % (n, prob_lo, prob_hi - 1), res)
+    #     write_jsonl("codellama_humaneval_tests_k%d_%d-%d_with_probs.jsonl" % (n, prob_lo, prob_hi - 1), res)
     
-    else:
-        prompts = []
-        for i, task_id in enumerate(problems):          
-            if i < prob_lo:
-                continue
-            if i == prob_hi:
-                break
-            prefix = "# Complete the following function.\n"
-            prompt = prefix + problems[task_id]["prompt"]
-            prompts.append(prompt)
+    # else:
+    #     prompts = []
+    #     for i, task_id in enumerate(problems):          
+    #         if i < prob_lo:
+    #             continue
+    #         if i == prob_hi:
+    #             break
+    #         prefix = "# Complete the following function.\n"
+    #         prompt = prefix + problems[task_id]["prompt"]
+    #         prompts.append(prompt)
         
-        responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
+    #     responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
 
-        res = []
-        for i in range(len(responses)):
-            task_id = 'HumanEval/%d' % (prob_lo + i)
-            for j in range(len(responses[i])):
-                prompt = problems[task_id]["prompt"]
-                gen_code = prompt + responses[i][j]
-                gen_function = extract_function(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_function, "logprobs" : logprobs[i][j]})
+    #     res = []
+    #     for i in range(len(responses)):
+    #         task_id = 'HumanEval/%d' % (prob_lo + i)
+    #         for j in range(len(responses[i])):
+    #             prompt = problems[task_id]["prompt"]
+    #             print("Generating for task %d" % task_id)
+    #             gen_code = prompt + responses[i][j]
+    #             gen_function = extract_function(gen_code)
+    #             res.append({"task_id" : task_id, "completion" : gen_function, "logprobs" : logprobs[i][j]})
         
-        write_jsonl("codellama_humaneval_programs_k%d_%d-%d_with_probs.jsonl" % (n, prob_lo, prob_hi - 1), res)
+    #     write_jsonl("codellama_humaneval_programs_k%d_%d-%d_with_probs.jsonl" % (n, prob_lo, prob_hi - 1), res)
 
