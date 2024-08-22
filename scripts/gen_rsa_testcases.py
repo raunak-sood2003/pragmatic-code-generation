@@ -1,56 +1,58 @@
 import numpy as np
 from ..src.rsa import RSA
 import json
+from tqdm import tqdm
 from human_eval.data import write_jsonl
+import fire
 
-if __name__ == '__main__':
+'''
+Uses RSA to select the most informative test cases given the set of generated programs and test cases. 
+'''
+def generate_rsa_testcases(num_programs, num_tests, num_rsa_tests, programs_dir, \
+                           tests_dir, const_matrix_dir, res_const_matrix_dir, res_testcase_dir):
     N_HUMAN_EVAL_EXAMPLES = 164
-    N_PROGRAMS = 100
-    N_TESTCASES = 100
-    
-    consistency_matrices_dir = '/home/rrsood/CodeGen/codellama_runs/const-matrices/codellama_humaneval_k100_const_matrix.npy'
-    consistency_matrices = np.load(consistency_matrices_dir)
+    consistency_matrices = np.load(const_matrix_dir)
 
     assert(consistency_matrices.shape[0] == N_HUMAN_EVAL_EXAMPLES)
-    assert(consistency_matrices.shape[1] == N_TESTCASES)
-    assert(consistency_matrices.shape[2] == N_PROGRAMS)
+    assert(consistency_matrices.shape[1] == num_tests)
+    assert(consistency_matrices.shape[2] == num_programs)
 
-    with open('/home/rrsood/CodeGen/codellama_runs/generations/codellama_humaneval_programs_k100.jsonl') as f:
+    with open(programs_dir) as f:
         json_programs = [json.loads(line) for line in f]
-    with open('/home/rrsood/CodeGen/codellama_runs/generations/codellama_humaneval_tests_k100.jsonl') as f:
+    with open(tests_dir) as f:
         json_tests = [json.loads(line) for line in f]
-    
-    # How many test cases you want RSA to select
-    k = 100
 
-    res_testcases = np.zeros([N_HUMAN_EVAL_EXAMPLES, k, N_PROGRAMS])
+    res_testcases = np.zeros([N_HUMAN_EVAL_EXAMPLES, num_rsa_tests, num_programs])
     res_json = []
     
-    for i in range(N_HUMAN_EVAL_EXAMPLES):
+    for i in tqdm(range(N_HUMAN_EVAL_EXAMPLES)):
         const_matrix = consistency_matrices[i]
         
         l0 = RSA.normalize_rows(const_matrix)
         s1 = RSA.normalize_cols(l0)
 
-        prag_testcases = np.zeros([N_TESTCASES])
+        prag_testcases = np.zeros([num_tests])
 
-        for j in range(N_PROGRAMS):
-            logprobs = json_programs[i * N_PROGRAMS + j]['logprobs']
+        for j in range(num_programs):
+            logprobs = json_programs[i * num_programs + j]['logprobs']
             log_p_c_given_p = sum(logprobs)
             log_p_t_given_c = np.log(s1[:, j])
             prag_testcases += np.exp(log_p_c_given_p + log_p_t_given_c)
         
         prag_testcase_idxs = np.argsort(prag_testcases)[::-1]
-        top_k_testcase_idxs = np.sort(prag_testcase_idxs[:k])
+        top_k_testcase_idxs = np.sort(prag_testcase_idxs[:num_rsa_tests])
 
         top_k_const_matrix = const_matrix[top_k_testcase_idxs]
         res_testcases[i] = top_k_const_matrix
 
         for j in range(top_k_testcase_idxs.shape[0]):
-            res_json.append(json_tests[i * N_TESTCASES + top_k_testcase_idxs[j]])
+            res_json.append(json_tests[i * num_tests + top_k_testcase_idxs[j]])
     
-    np.save('/home/rrsood/CodeGen/codellama_runs/rsa-testcases/codellama_humaneval_rsa_%dprograms_%dtestcases_const_matrix_k%d.npy' % (N_PROGRAMS, N_TESTCASES, k), res_testcases)
-    write_jsonl('/home/rrsood/CodeGen/codellama_runs/rsa-testcases/codellama_humaneval_rsa_%dprograms_%dtestcases_k%d.jsonl' % (N_PROGRAMS, N_TESTCASES, k), res_json)
+    np.save(res_const_matrix_dir, res_testcases)
+    write_jsonl(res_testcase_dir, res_json)
+
+if __name__ == '__main__':
+    fire.Fire(generate_rsa_testcases)
 
         
 

@@ -6,8 +6,8 @@ import json
 if __name__ == '__main__':
     model_name = "codellama/CodeLlama-13b-hf"
     output_dir = "."
-    api_base = "http://localhost:8010/v1"
-    n = 1000
+    api_base = "http://localhost:8070/v1"
+    n = 300
     
     params = {
         "temperature" : 0.8,
