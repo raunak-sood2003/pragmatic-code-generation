@@ -2,13 +2,16 @@ import signal
 import re
 import random
 import numpy as np
+import time
+import os
+import sys
 
 """
 Timer for executed programs. Waits a specified number of seconds 
 after execution before singaling a TimeOut error.
 """
 class timeout:
-    def __init__(self, seconds=1, error_message='Timeout'):
+    def __init__(self, seconds=0.1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
     
@@ -17,10 +20,12 @@ class timeout:
     
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)
-        signal.alarm(self.seconds)
+        # signal.alarm(self.seconds)
+        signal.setitimer(signal.ITIMER_REAL, self.seconds)
     
     def __exit__(self, type, value, traceback):
-        signal.alarm(0)
+        # signal.alarm(0)
+        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def extract_function_name(code_string):
@@ -97,12 +102,16 @@ def valid_program_testcase_pair(x, y):
     
     executable = x + "\n" + y
     
+    old_stdout = sys.stdout
     try:
+        sys.stdout = open(os.devnull, "w")
         with timeout():
             exec(executable)
+        sys.stdout = old_stdout
         return True
 
     except:
+        sys.stdout = old_stdout
         return False
 
 def subsample_matrix(matrix, n, m):
@@ -127,5 +136,11 @@ def verify_const_matrix(programs, tests, const_matrix):
             is_const_mat = const_matrix[i][j] == 1
             if is_const != is_const_mat:
                 print("****FAILED**** (i, j) = (%d, %d)" % (i, j))
+                print("Program:")
+                print(programs[i])
+                print("Test:")
+                print(tests[i])
+                print("True: %d" % is_const)
+                print("Const mat: %d" % is_const_mat)
                 return False
     return True

@@ -5,11 +5,11 @@
 #SBATCH --mem=128G
 #SBATCH --time=24:00:00
 
-N_PROGS=1000
-N_TESTS=1000
-PROGRAMS_DIR="/home/rrsood/CodeGen/codellama_runs/generations/codellama_humaneval_programs_k1000.jsonl"
-TESTS_DIR="/home/rrsood/CodeGen/codellama_runs/generations/codellama_humaneval_tests_k1000.jsonl"
-SAVE_DIR="/home/rrsood/CodeGen/const-matrices/codellama_humaneval_k1000_const_matrix.npy"
+N_PROGS=100
+N_TESTS=100
+PROGRAMS_DIR="/home/rrsood/CodeGen/incoder-6b/generations/incoder_humaneval_k100_programs.jsonl"
+TESTS_DIR="/home/rrsood/CodeGen/incoder-6b/generations/incoder_humaneval_k100_tests.jsonl"
+SAVE_DIR="/home/rrsood/CodeGen/incoder_humaneval_k100_const_matrix.npy"
 
 python3 -m pragmatic-code-generation.scripts.gen_consistency_matrix \
         --num_programs $N_PROGS \

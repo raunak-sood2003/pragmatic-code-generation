@@ -53,7 +53,7 @@ Main function for prompting an LLM hosted on a vLLM server with HumanEval data. 
 to pass in the model name and parameters to run all HumanEval prompts and stores the responses in the 
 output directory as a json file.
 '''
-def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, output_dir):
+def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, instruction_tuned, output_dir):
     api_base = "http://localhost:%d/v1" % port
     
     params = {
@@ -68,7 +68,7 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
     if to_gen_tests:
         prompts = []
         for i, task_id in enumerate(problems):                
-            prefix = "# Write test cases for the following function.\n"
+            prefix = "# Write test cases for the following function.\n" if instruction_tuned else ""
             suffix = "    pass\n\nassert"
             prompt = prefix + problems[task_id]["prompt"] + suffix
             prompts.append(prompt)
@@ -93,7 +93,7 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
     else:
         prompts = []
         for i, task_id in enumerate(problems):
-            prefix = "# Complete the following function.\n"
+            prefix = "# Complete the following function.\n" if instruction_tuned else ""
             prompt = prefix + problems[task_id]["prompt"]
             prompts.append(prompt)
             break
@@ -115,59 +115,5 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
         write_jsonl("%s/%s/humaneval_programs_k%d.jsonl" % (output_dir, model_name, num_generations), res)
 
 if __name__ == '__main__':
-    # model_name = "codellama/CodeLlama-13b-hf"
-    # output_dir = "."
-    # api_base = "http://localhost:8070/v1"
-    # n = 1000
-    
-    # params = {
-    #     "temperature" : 0.8,
-    #     "top_p" : 0.95,
-    #     "max_tokens" : 128,
-    #     "n" : n
-    # }
-
-    # problems = read_problems()
-    
-    # to_gen_tests = True
-
-    # if to_gen_tests:
-    #     prompts = []
-    #     for i, task_id in enumerate(problems):                
-    #         prefix = "# Write test cases for the following function.\n"
-    #         suffix = "    pass\n\nassert"
-    #         prompt = prefix + problems[task_id]["prompt"] + suffix
-    #         prompts.append(prompt)
-        
-    #     responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
-
-    #     res = []
-    #     for i, task_id in enumerate(problems):    
-    #         for j in range(len(responses[i])):
-    #             prompt = problems[task_id]["prompt"]
-    #             gen_code = prompt + responses[i][j]
-    #             gen_test = extract_testcase(gen_code)
-    #             res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[i][j]})
-
-    #     write_jsonl("codellama_humaneval_tests_k%d.jsonl" % n, res)
-    
-    # else:
-    #     prompts = []
-    #     for i, task_id in enumerate(problems):
-    #         prefix = "# Complete the following function.\n"
-    #         prompt = prefix + problems[task_id]["prompt"]
-    #         prompts.append(prompt)
-        
-    #     responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
-
-    #     res = []
-    #     for i, task_id in enumerate(problems):
-    #         for j in range(len(responses[i])):
-    #             prompt = problems[task_id]["prompt"]
-    #             gen_code = prompt + responses[i][j]
-    #             gen_function = extract_function(gen_code)
-    #             res.append({"task_id" : task_id, "completion" : gen_function, "logprobs" : logprobs[i][j]})
-        
-    #     write_jsonl("codellama_humaneval_programs_k%d.jsonl" % n, res)
     fire.Fire(vllm_prompt_humaneval)
 

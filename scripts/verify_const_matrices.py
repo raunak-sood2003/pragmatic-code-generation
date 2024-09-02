@@ -25,8 +25,10 @@ def verify_consistency_matrix(num_programs, num_tests, programs_dir, tests_dir, 
         programs = [json_program['completion'] for json_program in json_programs[i *  num_programs : i * num_programs + num_programs]]
         if verify_const_matrix(programs, tests, const_matrix):
             results.append(True)
+            print("HumanEval/%d PASS" % i)
         else:
             results.append(False)
+            print("HumanEval/%d FAIL" % i)
 
     print("Results:")
     print(results)
