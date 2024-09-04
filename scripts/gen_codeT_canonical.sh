@@ -10,11 +10,11 @@ NUM_TESTS=100
 NUM_INPUT_TESTS=1
 NUM_RANSAC_SAMPLES=100
 NUM_OUT_PROGRAMS=100
-PROGRAMS_DIR="/home/rrsood/CodeGen/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl"
-TESTS_DIR="/home/rrsood/CodeGen/codellama-13b/generations/codellama_humaneval_tests_k100.jsonl"
-CONST_MATRIX_DIR="/home/rrsood/CodeGen/codellama-13b/const-matrices/codellama_humaneval_k100_const_matrix.npy"
-CANONICAL_CONST_MATRIX_DIR="/home/rrsood/CodeGen/codellama-13b/const-matrices/codellama_humaneval_canonical_const_matrix_k100.npy"
-RES_DIR="/home/rrsood/CodeGen/codellama_codet_canonical_1_input_tests.jsonl"
+PROGRAMS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl"
+TESTS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/codellama-13b/generations/codellama_humaneval_tests_k100.jsonl"
+CONST_MATRIX_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/codellama-13b/const-matrices/codellama_humaneval_k100_const_matrix.npy"
+CANONICAL_CONST_MATRIX_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/codellama-13b/const-matrices/codellama_humaneval_canonical_const_matrix_k100.npy"
+RES_DIR="."
 
 python3 -m pragmatic-code-generation.scripts.gen_codeT_canonical \
         --num_programs $N_PROGRAMS \

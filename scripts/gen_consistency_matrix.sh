@@ -7,9 +7,9 @@
 
 N_PROGS=100
 N_TESTS=100
-PROGRAMS_DIR="/home/rrsood/CodeGen/incoder-6b/generations/incoder_humaneval_k100_programs.jsonl"
-TESTS_DIR="/home/rrsood/CodeGen/incoder-6b/generations/incoder_humaneval_k100_tests.jsonl"
-SAVE_DIR="/home/rrsood/CodeGen/incoder_humaneval_k100_const_matrix.npy"
+PROGRAMS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl"
+TESTS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/generations/codellama_humaneval_tests_k100.jsonl"
+SAVE_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/const-matrices/codellama_humaneval_k100_const_matrix.npy"
 
 python3 -m pragmatic-code-generation.scripts.gen_consistency_matrix \
         --num_programs $N_PROGS \
