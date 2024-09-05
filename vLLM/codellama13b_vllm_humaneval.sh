@@ -3,13 +3,13 @@
 #SBATCH --output=codellama13b_vllm_humaneval.out
 #SBATCH --error=codellama13b_vllm_humaneval.err
 #SBATCH --mem=48G
-#SBATCH --nodelist=babel-8-11
+#SBATCH --nodelist=babel-3-19
 #SBATCH --time=5:00:00
 
 MODEL_NAME="codellama/CodeLlama-13b-hf"
 PORT=8070
-TO_GEN_TESTS=0
-NUM_GENERATIONS=1000
+TO_GEN_TESTS=1
+NUM_GENERATIONS=100
 TEMPERATURE=0.8
 TOP_P=0.95
 MAX_TOKENS=128

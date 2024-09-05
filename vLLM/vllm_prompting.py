@@ -2,7 +2,7 @@ from openai import OpenAI
 import os
 from tqdm import tqdm
 from human_eval.data import write_jsonl, read_problems
-from ..src.utils import extract_function, extract_testcase
+from ..src.utils import extract_function, extract_testcase, extract_function_name
 import json
 import fire
 
@@ -48,6 +48,35 @@ def prompt_vllm(model_name, samples, output_dir, api_base, params):
     
     return responses, logprobs
 
+def find_all(a_str, sub):
+    start = 0
+    while True:
+        start = a_str.find(sub, start)
+        if start == -1: return
+        yield start
+        start += len(sub)
+
+def remove_testcase_from_prompt(problem):
+    prompt = problem["prompt"]
+    function_name = problem["entry_point"] + "("
+    testcase_idx1 = prompt.find(">>>")
+    function_idxs = [i for i in range(len(prompt)) if prompt.startswith(function_name, i)]
+    if len(function_idxs) > 1:
+        testcase_idx2 = function_idxs[1]
+    else:
+        testcase_idx2 = testcase_idx1
+    
+    testcase_min = min(testcase_idx1, testcase_idx2)
+    testcase_max = max(testcase_idx1, testcase_idx2)
+
+    if testcase_min == -1:
+        testcase_use_idx = testcase_max
+    else:
+        testcase_use_idx = testcase_min
+    
+    res_prompt = prompt[:testcase_use_idx] + "\"\"\"" + "\n"
+    return res_prompt
+
 '''
 Main function for prompting an LLM hosted on a vLLM server with HumanEval data. This function allows you 
 to pass in the model name and parameters to run all HumanEval prompts and stores the responses in the 
@@ -70,9 +99,9 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
         for i, task_id in enumerate(problems):                
             prefix = "# Write test cases for the following function.\n" if instruction_tuned else ""
             suffix = "    pass\n\nassert"
-            prompt = prefix + problems[task_id]["prompt"] + suffix
+            init_prompt = remove_testcase_from_prompt(problems[task_id])
+            prompt = prefix + init_prompt + suffix
             prompts.append(prompt)
-            break
         
         responses, logprobs = prompt_vllm(model_name, prompts, output_dir, api_base, params)
 
@@ -83,7 +112,6 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
                 gen_code = prompt + responses[i][j]
                 gen_test = extract_testcase(gen_code)
                 res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[i][j]})
-            break
 
         path_to_save = os.path.join(output_dir, model_name)
         if not os.path.isdir(path_to_save):
@@ -116,4 +144,20 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
 
 if __name__ == '__main__':
     fire.Fire(vllm_prompt_humaneval)
+
+    # problems = read_problems()
+
+    # for i, task_id in enumerate(problems):
+    #     # if i != 0:
+    #     #     continue
+        
+    #     init_prompt = problems[task_id]["prompt"]
+    #     new_prompt = remove_testcase_from_prompt(problems[task_id])
+
+    #     print("Init prompt:")
+    #     print(init_prompt)
+    #     print("Last char:", init_prompt[-1])
+    #     print("New prompt:")
+    #     print(new_prompt)
+    #     print("Last char:", new_prompt[-1])
 
