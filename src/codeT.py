@@ -16,18 +16,19 @@ class CodeT:
         k: top k of these generated programs (k <= n)
         const_matrix: (np.ndarray optional) Program/Test consistency matrix
         """
+        self.save_clusters = []
         try:            
             if const_matrix is not None:
                 assert(len(Y) == const_matrix.shape[0])
                 assert(len(X) == const_matrix.shape[1])
                 self.programs = self.dual_execution_agreement_from_const_matrix(X, Y, n, k, const_matrix)
-                print("Did CodeT from Consistency Matrix")
+                # print("Did CodeT from Consistency Matrix")
             else:
                 self.programs = self.dual_execution_agreement(X, Y, n, k)
-                print("Did CodeT From Scratch")
+                # print("Did CodeT From Scratch")
         except:
             self.programs = X[:k]
-            print("Did Not Do CodeT")
+            # print("Did Not Do CodeT")
 
     
     def dual_execution_agreement_from_const_matrix(self, X, Y, n, k, const_matrix):
@@ -45,6 +46,7 @@ class CodeT:
         ctr = 0
         num_iters = 0
         clusters = []
+        save_clusters = []
 
         while ctr < n and num_iters < patience:
             idx = random.randint(0, len(D) - 1)
@@ -54,6 +56,7 @@ class CodeT:
                 S_x, S_y = self.get_groups_from_const_matrix(X, Y, x, const_matrix)
                 score = len(S_x) * len(S_y)
                 clusters.append((S_x, score))
+                save_clusters.append((S_x, S_y, score))
                 ctr += 1
             num_iters += 1
         
@@ -62,6 +65,8 @@ class CodeT:
                             cases were found with given patience.")
         
         clusters.sort(key = lambda x : x[1], reverse = True)
+        save_clusters.sort(key = lambda x : x[2], reverse = True)
+        self.save_clusters = save_clusters
     
         ctr = 0
         n_clusters = len(clusters)

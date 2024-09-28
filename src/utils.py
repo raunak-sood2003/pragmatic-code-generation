@@ -11,7 +11,7 @@ Timer for executed programs. Waits a specified number of seconds
 after execution before singaling a TimeOut error.
 """
 class timeout:
-    def __init__(self, seconds=0.1, error_message='Timeout'):
+    def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
     
@@ -67,11 +67,17 @@ def evaluate_function(func_string, *args, **kwargs):
     
     return res
 
-def extract_function(string):
-    defs = [m.start() for m in re.finditer('def ', string)]
-    if len(defs) > 1:
-        return string[:defs[1]].strip()
-    return string.strip()
+def extract_function(code_string):
+    # Regular expression to match a Python function definition
+    function_pattern = r'(\bdef\s+\w+\(.*?\):\s*(?:[^#\n].*?\n|\s*#.*?\n)*?)(?:\n\s*|\s*#.*?$|\Z)'
+    
+    # Search for the function in the code string
+    match = re.search(function_pattern, code_string, re.DOTALL)
+    
+    if match:
+        return match.group(0)
+    else:
+        return None
 
 def extract_testcase(text):
     # Regular expression pattern to match 'assert x == y' or 'assert(x == y)'

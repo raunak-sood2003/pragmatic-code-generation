@@ -23,7 +23,6 @@ def generate_codeT_results(num_programs, num_tests, num_out_programs, num_ransac
         assert(len(rsa_tests) == num_tests)
         assert(len(programs) == num_programs)
 
-        print("HumanEval/%d" % i)
         codet = CodeT(programs, rsa_tests, num_ransac_samples, num_out_programs, const_matrix)
 
         for program in codet.programs:
