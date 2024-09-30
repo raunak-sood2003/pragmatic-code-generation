@@ -6,12 +6,16 @@ import fire
 from ..src.codeT import CodeT
 import os
 
-
+"""
+Runs CodeT using the model generated programs and test cases (need to precompute consistency matrix first). 
+Saves results in json file consisting of evalplus results and CodeT clusters.
+"""
 def generate_codeT_canonical_results(num_programs, num_tests, num_input_tests, num_ransac_samples, num_out_programs, \
-                                     programs_dir, canonical_programs_dir, tests_dir, const_matrix_dir, canonical_const_matrix_dir, res_programs_dir, res_json_dir):
-    N_HUMAN_EVAL_EXAMPLES = 164
-    const_matrices = np.load(const_matrix_dir)
-    canonical_const_matrices = np.load(canonical_const_matrix_dir)
+                                     programs_dir, canonical_programs_dir, tests_dir, const_matrix_dir, res_programs_dir, res_json_dir):
+    
+    combined_const_matrices = np.load(const_matrix_dir)
+    const_matrices = combined_const_matrices[:, :, :-1]
+    canonical_const_matrices = combined_const_matrices[:, :, -1, None]
 
     with open(programs_dir) as f:
         json_programs = [json.loads(line) for line in f]
@@ -19,11 +23,22 @@ def generate_codeT_canonical_results(num_programs, num_tests, num_input_tests, n
         json_canonical_programs = [json.loads(line) for line in f]
     with open(tests_dir) as f:
         json_tests = [json.loads(line) for line in f]
+    
+    task_ids = [program['task_id'] for program in json_canonical_programs]
+
+    # Determine if the dataset is HumanEval or MBPP (sanitized)
+    n_humaneval_problems = 164
+    n_mbpp_sanitize_problems = 427
+    if len(task_ids) == n_humaneval_problems:
+        dataset = "humaneval"
+    else:
+        assert(len(task_ids) == n_mbpp_sanitize_problems)
+        dataset = "mbpp"
 
     res_programs = []
     res_json = {}
-    for i in tqdm(range(N_HUMAN_EVAL_EXAMPLES)):
-        task_id = "HumanEval/%d" % i
+    for i, task_id in enumerate(task_ids):
+        print("Processing task_id %d" % i)
         json_res = {}
         const_matrix = const_matrices[i]
         canonical_const_matrix = canonical_const_matrices[i]
@@ -80,14 +95,12 @@ def generate_codeT_canonical_results(num_programs, num_tests, num_input_tests, n
             # Running CodeT and saving re-ranked programs
             codet = CodeT(programs, tests, num_ransac_samples, num_out_programs, const_matrix)
             for program in codet.programs:
-                task_id = 'HumanEval/%d' % i
                 res_programs.append({'task_id' : task_id, 'completion' : program})
             json_res['clusters'] = codet.save_clusters
             json_res["reranked_programs"] = codet.programs
         else:
             # If no CodeT, then just output the unique generated programs
             for program in programs:
-                task_id = 'HumanEval/%d' % i
                 res_programs.append({'task_id' : task_id, 'completion' : program})
         
         res_json[task_id] = json_res
@@ -95,32 +108,34 @@ def generate_codeT_canonical_results(num_programs, num_tests, num_input_tests, n
     # Save the re-ranked programs and evaluate
     write_jsonl(res_programs_dir, res_programs)
     os.system("export PYTHONPATH=$PYTHONPATH:/home/rrsood/CodeGen/evalplus")
-    os.system("python3 -m evalplus.evaluate --dataset humaneval --samples %s" % res_programs_dir)
+    os.system("python3 -m evalplus.evaluate --dataset %s --samples %s" % (dataset, res_programs_dir))
 
     # Save eval results to json
     res_programs_result_dir = res_programs_dir[:-6] + "_eval_results" + ".json"
     with open(res_programs_result_dir) as f:
         eval_res_json = json.load(f)
+    
+    task_ids = list(eval_res_json['eval'].keys())
 
-    for i in range(N_HUMAN_EVAL_EXAMPLES):
-        task_id = "HumanEval/%d" % i
+    for i, task_id in enumerate(task_ids):
+        print("Processing task_id %d" % i)
         res_program_json = eval_res_json["eval"][task_id]
-        humaneval_res = []
-        evalplus_res = []
+        base_res = []
+        plus_res = []
 
         for j in range(len(res_program_json)):
             if res_program_json[j]["base_status"] == "pass":
-                humaneval_res.append(1)
+                base_res.append(1)
             else:
-                humaneval_res.append(0)
+                base_res.append(0)
             
             if res_program_json[j]["plus_status"] == "pass":
-                evalplus_res.append(1)
+                plus_res.append(1)
             else:
-                evalplus_res.append(0)
+                plus_res.append(0)
         
-        res_json[task_id]["humaneval_results"] = humaneval_res
-        res_json[task_id]["evalplus_results"] = evalplus_res
+        res_json[task_id]["base_results"] = base_res
+        res_json[task_id]["plus_results"] = plus_res
 
 
     with open(res_json_dir, 'w') as f:
@@ -128,29 +143,3 @@ def generate_codeT_canonical_results(num_programs, num_tests, num_input_tests, n
 
 if __name__ == '__main__':
     fire.Fire(generate_codeT_canonical_results)
-
-    # NUM_PROGRAMS=100
-    # NUM_TESTS=100
-    # # NUM_INPUT_TESTS=1
-    # NUM_RANSAC_SAMPLES=100
-    # NUM_OUT_PROGRAMS=100
-    # PROGRAMS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl"
-    # CANONICAL_PROGRAMS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/humaneval_canonical_solutions.jsonl"
-    # TESTS_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/generations/codellama_humaneval_tests_k100_temp0.8.jsonl"
-    # CONST_MATRIX_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/const-matrices/codellama_humaneval_k100_const_matrix.npy"
-    # CANONICAL_CONST_MATRIX_DIR="/home/rrsood/CodeGen/pragmatic-code-generation/data/codellama-13b/const-matrices/codellama_humaneval_canonical_const_matrix_k100.npy"
-    # RES_PROGRAMS_DIR="/home/rrsood/CodeGen/test_program_codet.jsonl"
-    # RES_JSON_DIR="/home/rrsood/CodeGen/test_res_codet.json"
-
-    # generate_codeT_canonical_results(NUM_PROGRAMS, NUM_TESTS, NUM_INPUT_TESTS, NUM_RANSAC_SAMPLES, NUM_OUT_PROGRAMS, \
-    #                                 PROGRAMS_DIR, CANONICAL_PROGRAMS_DIR, TESTS_DIR, CONST_MATRIX_DIR, CANONICAL_CONST_MATRIX_DIR, RES_PROGRAMS_DIR, RES_JSON_DIR)
-
-    # num_input_tests = [1]
-    # num_repeats = 1
-
-    # for i in range(num_repeats):
-    #     for num_tests in num_input_tests:
-    #         RES_PROGRAMS_DIR="/home/rrsood/CodeGen/new-data/codellama-13b/rsa_codeT_results/codeT/%d_test/codellama_humaneval_codeT_programs_%dtest_run%d.jsonl" % (num_tests, num_tests, i)
-    #         RES_JSON_DIR="/home/rrsood/CodeGen/new-data/codellama-13b/rsa_codeT_results/codeT/%d_test/codellama_humaneval_codeT_result_%dtest_run%d.json" % (num_tests, num_tests, i)
-    #         generate_codeT_canonical_results(NUM_PROGRAMS, NUM_TESTS, num_tests, NUM_RANSAC_SAMPLES, NUM_OUT_PROGRAMS, \
-    #                                     PROGRAMS_DIR, CANONICAL_PROGRAMS_DIR, TESTS_DIR, CONST_MATRIX_DIR, CANONICAL_CONST_MATRIX_DIR, RES_PROGRAMS_DIR, RES_JSON_DIR)

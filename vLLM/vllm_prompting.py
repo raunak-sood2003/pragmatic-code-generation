@@ -14,7 +14,7 @@ samples: (List[string]) list of prompts
 api_base: (string) IP addres and port of vLLM server
 params: (dict) LLM params
 """
-def prompt_vllm(model_name, samples, api_base, params):
+def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, output_dir):
     api_key = "EMPTY"
     client = OpenAI(
         api_key=api_key,
@@ -22,9 +22,18 @@ def prompt_vllm(model_name, samples, api_base, params):
     
     responses = []
     logprobs = []
+
+    if dataset != 'humaneval' and dataset != 'mbpp':
+        print("Invalid data set")
+        return
     
     for i in tqdm(range(len(samples))):
         sample = samples[i]
+        if dataset == 'humaneval':
+            task_id = "HumanEval/%d" % i
+        else:
+            task_id = "Mbpp/%d" % (i+1)
+       
         print("Prompt:")
         print(sample)
         try:
@@ -40,6 +49,17 @@ def prompt_vllm(model_name, samples, api_base, params):
             probs = [choice.logprobs.token_logprobs for choice in response.choices]
             responses.append(completions)
             logprobs.append(probs)
+
+            res = []
+            for j in range(len(responses[i])):
+                gen_code = sample + responses[i][j]
+                if to_gen_tests:
+                    gen_code = extract_testcase(gen_code)
+                else:
+                    gen_code = extract_function(gen_code)
+                res.append({"task_id" : task_id, "completion" : gen_code, "logprobs" : logprobs[i][j]})
+
+            write_jsonl(output_dir, res, True)
         
         except Exception as e:
             print(e)
@@ -104,33 +124,12 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
         "n" : num_generations
     }
 
-    N_HUMANEVAL_EXAMPLES = 164
-
     program_prompts, test_prompts = read_humaneval_examples()
-
-    if to_gen_tests:        
-        responses, logprobs = prompt_vllm(model_name, test_prompts, api_base, params)
-        res = []
-        for i in range(N_HUMANEVAL_EXAMPLES):
-            task_id = "HumanEval/%d" % i
-            for j in range(len(responses[i])):
-                gen_code = responses[i][j]
-                gen_test = extract_testcase(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[i][j]})
-
-        write_jsonl(output_dir, res)
-    
+    if to_gen_tests:
+        prompts = test_prompts
     else:
-        responses, logprobs = prompt_vllm(model_name, program_prompts, output_dir, api_base, params)
-        res = []
-        for i in range(N_HUMANEVAL_EXAMPLES):
-            task_id = "HumanEval/%d" % i
-            for j in range(len(responses[i])):
-                gen_code = program_prompts[i] + responses[i][j]
-                gen_function = extract_function(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_function, "logprobs" : logprobs[i][j]})
-        
-        write_jsonl(output_dir, res)
+        prompts = program_prompts
+    _, _ = prompt_vllm(model_name, prompts, api_base, params, "humaneval", to_gen_tests, output_dir)
 
 """
 Reads and formats MBPP prompts for non-instruction tuned models. Function takes in path to MBPP problems 
@@ -172,7 +171,7 @@ def read_mbpp_examples(data_path):
 Main function for prompting an LLM hosted on a vLLM server with MBPP data. This function allows you to pass in the model 
 name and parameters to run a particular split of MBPP prompts and stores the responses in the output directory as a jsonl file.
 '''
-def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, mbpp_split, mbpp_dir, output_dir):
+def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, mbpp_dir, output_dir):
     api_base = "http://localhost:%d/v1" % port
     
     params = {
@@ -183,47 +182,14 @@ def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperatur
     }
 
     program_prompts, test_prompts = read_mbpp_examples(mbpp_dir)
-    
-    if mbpp_split == 'prompt':
-        task_range = range(1, 11)
-    elif mbpp_split == 'test':
-        task_range = range(11, 511)
-    elif mbpp_split == 'val':
-        task_range = range(511, 601)
-    elif mbpp_split == 'train':
-        task_range = range(601, 975)
-    elif mbpp_split == 'full':
-        task_range = range(1, 975)
-    else:
-        print("Invalid split!")
-        assert(False)
-
-    task_ids = [i for i in task_range]
-    
     assert(len(program_prompts) == len(test_prompts))
-    assert(len(program_prompts) == len(task_ids))
 
-    if to_gen_tests:       
-        responses, logprobs = prompt_vllm(model_name, test_prompts, api_base, params)
-        res = []
-        for i, task_id in enumerate(task_ids):    
-            for j in range(len(responses[i])):
-                gen_code = responses[i][j]
-                gen_test = extract_testcase(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_test, "logprobs" : logprobs[i][j]})
+    if to_gen_tests:
+        prompts = test_prompts
+    else:
+        prompts = program_prompts
 
-        write_jsonl(output_dir, res)
-    
-    else:   
-        responses, logprobs = prompt_vllm(model_name, program_prompts, api_base, params)
-        res = []
-        for i, task_id in enumerate(task_ids):
-            for j in range(len(responses[i])):
-                gen_code = program_prompts[i] + responses[i][j]
-                gen_function = extract_function(gen_code)
-                res.append({"task_id" : task_id, "completion" : gen_function, "logprobs" : logprobs[i][j]})
-
-        write_jsonl(output_dir, res)
+    _, _ = prompt_vllm(model_name, prompts, api_base, params, "mbpp", to_gen_tests, output_dir)
 
 if __name__ == '__main__':
     fire.Fire(vllm_prompt_mbpp)

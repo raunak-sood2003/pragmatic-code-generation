@@ -68,16 +68,20 @@ def evaluate_function(func_string, *args, **kwargs):
     return res
 
 def extract_function(code_string):
-    # Regular expression to match a Python function definition
-    function_pattern = r'(\bdef\s+\w+\(.*?\):\s*(?:[^#\n].*?\n|\s*#.*?\n)*?)(?:\n\s*|\s*#.*?$|\Z)'
-    
-    # Search for the function in the code string
-    match = re.search(function_pattern, code_string, re.DOTALL)
-    
-    if match:
-        return match.group(0)
-    else:
-        return None
+    try:
+        with timeout(seconds=10):
+            # Regular expression to match a Python function definition
+            function_pattern = r'(\bdef\s+\w+\(.*?\):\s*(?:[^#\n].*?\n|\s*#.*?\n)*?)(?:\n\s*|\s*#.*?$|\Z)'
+            
+            # Search for the function in the code string
+            match = re.search(function_pattern, code_string, re.DOTALL)
+            
+            if match:
+                return match.group(0)
+            else:
+                return code_string
+    except:
+        return code_string
 
 def extract_testcase(text):
     # Regular expression pattern to match 'assert x == y' or 'assert(x == y)'
