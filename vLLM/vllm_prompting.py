@@ -6,15 +6,15 @@ from ..src.utils import extract_function, extract_testcase
 import json
 import fire
 
-"""
-Prompting LLM at vLLM server
-
-model_name: (string) name of the model at the server
-samples: (List[string]) list of prompts
-api_base: (string) IP addres and port of vLLM server
-params: (dict) LLM params
-"""
 def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, output_dir):
+    """
+    Prompting LLM at vLLM server
+
+    model_name: (string) name of the model at the server
+    samples: (List[string]) list of prompts
+    api_base: (string) IP addres and port of vLLM server
+    params: (dict) LLM params
+    """
     api_key = "EMPTY"
     client = OpenAI(
         api_key=api_key,
@@ -52,7 +52,7 @@ def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, ou
 
             res = []
             for j in range(len(responses[i])):
-                gen_code = sample + responses[i][j]
+                gen_code = responses[i][j] # NEED TO MAKE THIS GENERALIZED
                 if to_gen_tests:
                     gen_code = extract_testcase(gen_code)
                 else:
@@ -66,33 +66,35 @@ def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, ou
     
     return responses, logprobs
 
-"""
-Reads and formats HumanEval prompts for non-instruction tuned models. Returns prompts 
-that can be used to generate programs and test cases based on HumanEval problems.
-"""
-def read_humaneval_examples():
-    # Removes test cases from HumanEval docstrings
-    def remove_testcase_from_prompt(problem):
-        prompt = problem["prompt"]
-        function_name = problem["entry_point"] + "("
-        testcase_idx1 = prompt.find(">>>")
-        function_idxs = [i for i in range(len(prompt)) if prompt.startswith(function_name, i)]
-        if len(function_idxs) > 1:
-            testcase_idx2 = function_idxs[1]
-        else:
-            testcase_idx2 = testcase_idx1
-        
-        testcase_min = min(testcase_idx1, testcase_idx2)
-        testcase_max = max(testcase_idx1, testcase_idx2)
-
-        if testcase_min == -1:
-            testcase_use_idx = testcase_max
-        else:
-            testcase_use_idx = testcase_min
-        
-        res_prompt = prompt[:testcase_use_idx] + "\"\"\"" + "\n"
-        return res_prompt
+def remove_testcase_from_prompt(problem):
+    """
+    Removes test cases from HumanEval prompts (for unbiased test synthesis)
+    """
+    prompt = problem["prompt"]
+    function_name = problem["entry_point"] + "("
+    testcase_idx1 = prompt.find(">>>")
+    function_idxs = [i for i in range(len(prompt)) if prompt.startswith(function_name, i)]
+    if len(function_idxs) > 1:
+        testcase_idx2 = function_idxs[1]
+    else:
+        testcase_idx2 = testcase_idx1
     
+    testcase_min = min(testcase_idx1, testcase_idx2)
+    testcase_max = max(testcase_idx1, testcase_idx2)
+
+    if testcase_min == -1:
+        testcase_use_idx = testcase_max
+    else:
+        testcase_use_idx = testcase_min
+    
+    res_prompt = prompt[:testcase_use_idx] + "\"\"\"" + "\n"
+    return res_prompt
+
+def read_humaneval_examples():
+    """
+    Reads and formats HumanEval prompts for non-instruction tuned models. Returns prompts 
+    that can be used to generate programs and test cases based on HumanEval problems.
+    """
     problems = read_problems()
     program_prompts = []
     test_prompts = []
@@ -109,13 +111,12 @@ def read_humaneval_examples():
 
     return program_prompts, test_prompts
 
-
-'''
-Main function for prompting an LLM hosted on a vLLM server with HumanEval data. This function allows you 
-to pass in the model name and parameters to run all HumanEval prompts and stores the responses in the 
-output directory as a jsonl file.
-'''
 def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, output_dir):
+    """
+    Main function for prompting an LLM hosted on a vLLM server with HumanEval data. This function allows you 
+    to pass in the model name and parameters to run all HumanEval prompts and stores the responses in the 
+    output directory as a jsonl file.
+    """
     api_base = "http://localhost:%d/v1" % port
     params = {
         "temperature" : temperature,
@@ -131,11 +132,11 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
         prompts = program_prompts
     _, _ = prompt_vllm(model_name, prompts, api_base, params, "humaneval", to_gen_tests, output_dir)
 
-"""
-Reads and formats MBPP prompts for non-instruction tuned models. Function takes in path to MBPP problems 
-json file and returns prompts for generating programs and test cases based on MBPP problems.
-"""
 def read_mbpp_examples(data_path):
+    """
+    Reads and formats MBPP prompts for non-instruction tuned models. Function takes in path to MBPP problems 
+    json file and returns prompts for generating programs and test cases based on MBPP problems.
+    """
     def extract_function_header(code):
         header = code[:code.find(')')+2]
         if header[-1] == " ":
@@ -167,11 +168,11 @@ def read_mbpp_examples(data_path):
         test_prompts.append(test_prompt_format)
     return program_prompts, test_prompts
 
-'''
-Main function for prompting an LLM hosted on a vLLM server with MBPP data. This function allows you to pass in the model 
-name and parameters to run a particular split of MBPP prompts and stores the responses in the output directory as a jsonl file.
-'''
 def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, mbpp_dir, output_dir):
+    """
+    Main function for prompting an LLM hosted on a vLLM server with MBPP data. This function allows you to pass in the model 
+    name and parameters to run a particular split of MBPP prompts and stores the responses in the output directory as a jsonl file.
+    """
     api_base = "http://localhost:%d/v1" % port
     
     params = {

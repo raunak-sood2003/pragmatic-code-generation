@@ -6,6 +6,9 @@ from tqdm import tqdm
 from ..src.codeT import CodeT
 
 def generate_rsa_codeT_results(num_programs, num_rsa_tests, num_out_programs, num_ransac_samples, programs_dir, rsa_tests_dir, rsa_const_matrix_dir, res_dir):
+    """
+    Selects test cases based on RSA inference time algorithm and runs CodeT to re-rank programs with the test cases.
+    """
     N_HUMAN_EVAL_EXAMPLES = 164
     rsa_const_matrices = np.load(rsa_const_matrix_dir)
 

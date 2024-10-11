@@ -4,11 +4,11 @@ import fire
 from tqdm import tqdm
 from ..src.utils import valid_program_testcase_pair
 
-'''
-Generates consistency matrix (numpy matrix) given JSON files of programs, test cases and canonical programs
-generated from HumanEval/MBPP prompts. JSON files should have generated code in a "completion" entry.
-'''
 def generate_const_matrix(num_programs, num_tests, programs_dir, tests_dir, canonical_programs_dir, save_dir):
+    """
+    Generates consistency matrix (numpy matrix) given JSON files of programs, test cases and canonical programs
+    generated from HumanEval/MBPP prompts. JSON files should have generated code in a "completion" entry.
+    """
     with open(programs_dir) as f:
         json_programs = [json.loads(program) for program in f]
     with open(tests_dir) as f:

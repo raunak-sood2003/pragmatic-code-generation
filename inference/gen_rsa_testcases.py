@@ -5,11 +5,11 @@ from tqdm import tqdm
 from human_eval.data import write_jsonl
 import fire
 
-'''
-Uses RSA to select the most informative test cases given the set of generated programs and test cases. 
-'''
 def generate_rsa_testcases(num_programs, num_tests, num_rsa_tests, programs_dir, \
                            tests_dir, const_matrix_dir, res_const_matrix_dir, res_testcase_dir):
+    '''
+    Uses RSA to select the most informative test cases given the set of generated programs and test cases. 
+    '''
     N_HUMAN_EVAL_EXAMPLES = 164
     consistency_matrices = np.load(const_matrix_dir)
 
