@@ -99,6 +99,11 @@ def extract_testcase(text):
         return matches2[0]
     else:
         return ""
+    
+def extract_executable_from_test(test):
+    without_assert = test[7:]
+    close_paren_idx = without_assert.find(")")
+    return without_assert[:close_paren_idx+1]
 
 def valid_program_testcase_pair(x, y):
     '''
@@ -123,6 +128,25 @@ def valid_program_testcase_pair(x, y):
     except:
         sys.stdout = old_stdout
         return False
+    
+def execute_testcase(x, y):
+    if len(x) == 0 or len(y) == 0:
+        return None
+    
+    function_call = "result = %s" % extract_executable_from_test(y)
+    executable = x + "\n" + function_call
+    old_stdout = sys.stdout
+    try:
+        loc = {}
+        sys.stdout = open(os.devnull, "w")
+        with timeout():
+            exec(executable, globals(), loc)
+        sys.stdout = old_stdout
+        return loc['result']
+    except:
+        sys.stdout = old_stdout
+        return None
+        
 
 def subsample_matrix(matrix, n, m):
     '''
