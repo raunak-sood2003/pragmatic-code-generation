@@ -6,17 +6,11 @@ import fire
 import os
 from ..src.mbr_exec import MBRExec
 
-def generate_mbr_exec_results(num_programs, num_tests, programs_dir, tests_dir, \
-                              res_dir, res_json_dir, value_matrix_dir = None):
+def generate_mbr_exec_results(num_programs, num_tests, num_input_tests, programs_dir, tests_dir, res_dir, res_json_dir):
     """
     Uses MBRExec algorithm to re-rank model generated programs based on test execution results.
     """
     N_HUMAN_EVAL_EXAMPLES = 164
-    if value_matrix_dir is not None:
-        value_matrices = np.load(value_matrix_dir)
-    else:
-        value_matrices = None
-
     with open(programs_dir) as f:
         json_programs = [json.loads(line) for line in f]
     with open(tests_dir) as f:
@@ -38,20 +32,28 @@ def generate_mbr_exec_results(num_programs, num_tests, programs_dir, tests_dir, 
         
         program_idxs = np.array(list(unique_programs.values()))
         test_idxs = np.array(list(unique_tests.values()))
-        
-        
-        # Update the programs, tests and value_matrix
-        if value_matrices is not None:
-            value_matrix = value_matrices[i][test_idxs, :][:, program_idxs]
+
+        to_run_mbr = True
+        if test_idxs.size >= num_input_tests:
+            # We have at least num_input_tests amount of tests
+            test_idxs = np.random.permutation(test_idxs)[:num_input_tests]
+        elif test_idxs.size < num_input_tests and test_idxs.size >= 1:
+            # We have enough tests for MBRExec but not num_input_tests amount
+            test_idxs = np.random.permutation(test_idxs)
         else:
-            value_matrix = None
-     
+            to_run_mbr = False
+        
+        # Update the programs and tests
         programs = programs[program_idxs].reshape(-1).tolist()
         tests = tests[test_idxs].reshape(-1).tolist()
 
-        mbr_exec = MBRExec(programs, tests, value_matrix)
-        for program in mbr_exec.reranked_programs:
-            res_programs.append({'task_id' : task_id, 'completion' : program})
+        if to_run_mbr:
+            mbr_exec = MBRExec(programs, tests)
+            for program in mbr_exec.reranked_programs:
+                res_programs.append({'task_id' : task_id, 'completion' : program})
+        else:
+            for program in programs:
+                res_programs.append({'task_id' : task_id, 'completion' : program})
         
     
     write_jsonl(res_dir, res_programs)
