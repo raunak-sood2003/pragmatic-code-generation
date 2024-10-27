@@ -72,13 +72,6 @@ class ModelArguments:
         },
     )
 
-    # output_dir : str = field(
-    #     default = None,
-    #     metadata = {
-    #         "help": "Where to store the model checkpoints during training"
-    #     },
-    # )
-
 def sft_trainer(model_args, data_args, training_args):
     dataset = load_dataset(
         "json", 
@@ -100,11 +93,6 @@ def sft_trainer(model_args, data_args, training_args):
     else:
         # Default prompt template is the program itself
         prompt_template = "{}"
-    
-    # def preprocess_fn(example):
-    #     # Apply prompt template to input program and tokenize
-    #     prompt = prompt_template.format(example['program'])
-    #     return tokenizer(prompt, text_target = example['test'])
 
     def preprocess_fn(example):
         # Apply prompt template to input program and tokenize
