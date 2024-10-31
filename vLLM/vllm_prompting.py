@@ -2,7 +2,7 @@ from openai import OpenAI
 import os
 from tqdm import tqdm
 from human_eval.data import write_jsonl, read_problems
-from ..src.utils import extract_function, extract_testcase
+from ..src.utils import extract_function, extract_testcase, format_humaneval_examples, format_mbpp_examples
 import json
 import fire
 
@@ -90,27 +90,6 @@ def remove_testcase_from_prompt(problem):
     res_prompt = prompt[:testcase_use_idx] + "\"\"\"" + "\n"
     return res_prompt
 
-def read_humaneval_examples():
-    """
-    Reads and formats HumanEval prompts for non-instruction tuned models. Returns prompts 
-    that can be used to generate programs and test cases based on HumanEval problems.
-    """
-    problems = read_problems()
-    program_prompts = []
-    test_prompts = []
-    for task_id in problems:                
-        test_prefix = "# Write test cases for the following function.\n"
-        test_suffix = "    pass\n\nassert"
-        test_init_prompt = remove_testcase_from_prompt(problems[task_id])
-        test_prompt = test_prefix + test_init_prompt + test_suffix
-        test_prompts.append(test_prompt)
-
-        program_prefix = "# Complete the following function.\n"
-        program_prompt = program_prefix + problems[task_id]["prompt"]
-        program_prompts.append(program_prompt)
-
-    return program_prompts, test_prompts
-
 def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, output_dir):
     """
     Main function for prompting an LLM hosted on a vLLM server with HumanEval data. This function allows you 
@@ -125,48 +104,14 @@ def vllm_prompt_humaneval(model_name, port, to_gen_tests, num_generations, tempe
         "n" : num_generations
     }
 
-    program_prompts, test_prompts = read_humaneval_examples()
+    program_prompt_template = "# Complete the following function.\n{}"
+    test_prompt_template = "# Write test cases for the following function.\n{}    pass\n\nassert"
+    program_prompts, test_prompts = format_humaneval_examples(read_problems(), program_prompt_template, test_prompt_template)
     if to_gen_tests:
         prompts = test_prompts
     else:
         prompts = program_prompts
     _, _ = prompt_vllm(model_name, prompts, api_base, params, "humaneval", to_gen_tests, output_dir)
-
-def read_mbpp_examples(data_path):
-    """
-    Reads and formats MBPP prompts for non-instruction tuned models. Function takes in path to MBPP problems 
-    json file and returns prompts for generating programs and test cases based on MBPP problems.
-    """
-    def extract_function_header(code):
-        header = code[:code.find(')')+2]
-        if header[-1] == " ":
-            header = header[:-1] + ":"
-        return header
-    
-    def format_program_prompt(q, tests, code):
-        instruction = "# Complete the following function\n"
-        prompt = "{}\n    \"\"\"    \n    {}\n    >>> {}    \n    \"\"\"".format(extract_function_header(code), q.strip(), "\n    >>> ".join(tests))
-        return instruction + prompt
-    
-    def format_test_prompt(q, code):
-        instruction = "# Write test cases for the following function\n"
-        prompt = "{}\n    \"\"\"    \n    {}\n    \"\"\"\n    pass\n\nassert(".format(extract_function_header(code), q.strip())
-        return instruction + prompt
-
-    examples = [json.loads(x) for x in open(data_path)]  
-
-    program_prompts = []
-    test_prompts = []
-    for i in range(len(examples)):
-        ex = examples[i]
-        q, test, code = ex['text'], ex['test_list'], ex['code']
-        
-        program_prompt_format = format_program_prompt(q, test, code)
-        test_prompt_format = format_test_prompt(q, code)
-
-        program_prompts.append(program_prompt_format)
-        test_prompts.append(test_prompt_format)
-    return program_prompts, test_prompts
 
 def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperature, top_p, max_tokens, mbpp_dir, output_dir):
     """
@@ -182,7 +127,9 @@ def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperatur
         "n" : num_generations
     }
 
-    program_prompts, test_prompts = read_mbpp_examples(mbpp_dir)
+    program_prompt_template = "# Complete the following function.\n{}"
+    test_prompt_template = "# Write test cases for the following function.\n{}\nassert"
+    program_prompts, test_prompts = format_mbpp_examples(mbpp_dir, program_prompt_template, test_prompt_template)
     assert(len(program_prompts) == len(test_prompts))
 
     if to_gen_tests:

@@ -8,11 +8,13 @@ import sys
 import gzip
 import json
 
-"""
-Timer for executed programs. Waits a specified number of seconds 
-after execution before singaling a TimeOut error.
-"""
+########### Miscelaneous helper utilities ############
+
 class timeout:
+    '''
+    Timer for executed programs. Waits a specified number of seconds 
+    after execution before singaling a TimeOut error.
+    '''
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
@@ -29,6 +31,27 @@ class timeout:
         # signal.alarm(0)
         signal.setitimer(signal.ITIMER_REAL, 0)
 
+def write_jsonl(filename, data, append = False):
+    """
+    Writes an iterable of dictionaries to jsonl. Taken from Open-AI's 
+    HumanEval GitHub: https://github.com/openai/human-eval/tree/master
+    """
+    if append:
+        mode = 'ab'
+    else:
+        mode = 'wb'
+    filename = os.path.expanduser(filename)
+    if filename.endswith(".gz"):
+        with open(filename, mode) as fp:
+            with gzip.GzipFile(fileobj=fp, mode='wb') as gzfp:
+                for x in data:
+                    gzfp.write((json.dumps(x) + "\n").encode('utf-8'))
+    else:
+        with open(filename, mode) as fp:
+            for x in data:
+                fp.write((json.dumps(x) + "\n").encode('utf-8'))
+
+########### Functions for extracting code from strings ############
 
 def extract_function_name(code_string):
     '''
@@ -44,6 +67,51 @@ def extract_function_name(code_string):
     else:
         return None
 
+def extract_function(code_string):
+    '''
+    Extracts a function definition from a code string.
+    '''
+    try:
+        with timeout(seconds=10):
+            # Regular expression to match a Python function definition
+            function_pattern = r'(\bdef\s+\w+\(.*?\):\s*(?:[^#\n].*?\n|\s*#.*?\n)*?)(?:\n\s*|\s*#.*?$|\Z)'
+            
+            # Search for the function in the code string
+            match = re.search(function_pattern, code_string, re.DOTALL)
+            
+            if match:
+                return match.group(0)
+            else:
+                return code_string
+    except:
+        return code_string
+
+def extract_testcase(text):
+    '''
+    Extracts test cases (as assert statements) from a model generation.
+    '''
+    # Regular expression pattern to match 'assert x == y' or 'assert(x == y)'
+    pattern1 = r'assert\s+\(?[^\n]*\s*==\s*[^\n]*\)?'
+    pattern2 = r'assert\s*\(.*?=\s*.*?\)'
+    
+    # Find all matches in the text using the pattern
+    matches1 = re.findall(pattern1, text)
+    matches2 = re.findall(pattern2, text)
+
+    if len(matches1) > 0:
+        return matches1[0]
+    elif len(matches2) > 0:
+        return matches2[0]
+    else:
+        return ""
+
+def extract_function_header(code):
+    header = code[:code.find(')')+2]
+    if header[-1] == " ":
+        header = header[:-1] + ":"
+    return header
+
+########### Functions for executing code as strings ############
 
 def evaluate_function(func_string, *args, **kwargs):
     '''
@@ -68,44 +136,6 @@ def evaluate_function(func_string, *args, **kwargs):
             res = None
     
     return res
-
-def extract_function(code_string):
-    try:
-        with timeout(seconds=10):
-            # Regular expression to match a Python function definition
-            function_pattern = r'(\bdef\s+\w+\(.*?\):\s*(?:[^#\n].*?\n|\s*#.*?\n)*?)(?:\n\s*|\s*#.*?$|\Z)'
-            
-            # Search for the function in the code string
-            match = re.search(function_pattern, code_string, re.DOTALL)
-            
-            if match:
-                return match.group(0)
-            else:
-                return code_string
-    except:
-        return code_string
-
-def extract_testcase(text):
-    # Regular expression pattern to match 'assert x == y' or 'assert(x == y)'
-    
-    pattern1 = r'assert\s+\(?[^\n]*\s*==\s*[^\n]*\)?'
-    pattern2 = r'assert\s*\(.*?=\s*.*?\)'
-    
-    # Find all matches in the text using the pattern
-    matches1 = re.findall(pattern1, text)
-    matches2 = re.findall(pattern2, text)
-
-    if len(matches1) > 0:
-        return matches1[0]
-    elif len(matches2) > 0:
-        return matches2[0]
-    else:
-        return ""
-    
-def extract_executable_from_test(test):
-    without_assert = test[7:]
-    close_paren_idx = without_assert.find(")")
-    return without_assert[:close_paren_idx+1]
 
 def valid_program_testcase_pair(x, y):
     '''
@@ -132,8 +162,16 @@ def valid_program_testcase_pair(x, y):
         return False
     
 def execute_testcase(x, y):
+    '''
+    Executes a program (x) on a test case (y) in unittest format.
+    '''
     if len(x) == 0 or len(y) == 0:
         return None
+
+    def extract_executable_from_test(test):
+        without_assert = test[7:]
+        close_paren_idx = without_assert.find(")")
+        return without_assert[:close_paren_idx+1]
     
     function_call = "result = %s" % extract_executable_from_test(y)
     executable = x + "\n" + function_call
@@ -149,26 +187,7 @@ def execute_testcase(x, y):
         sys.stdout = old_stdout
         return None
 
-# Taken from Open-AI's HumanEval GitHub: https://github.com/openai/human-eval/tree/master
-def write_jsonl(filename, data, append = False):
-    """
-    Writes an iterable of dictionaries to jsonl
-    """
-    if append:
-        mode = 'ab'
-    else:
-        mode = 'wb'
-    filename = os.path.expanduser(filename)
-    if filename.endswith(".gz"):
-        with open(filename, mode) as fp:
-            with gzip.GzipFile(fileobj=fp, mode='wb') as gzfp:
-                for x in data:
-                    gzfp.write((json.dumps(x) + "\n").encode('utf-8'))
-    else:
-        with open(filename, mode) as fp:
-            for x in data:
-                fp.write((json.dumps(x) + "\n").encode('utf-8'))
-        
+########### Functions for consistency matrices ############
 
 def subsample_matrix(matrix, n, m):
     '''
@@ -200,3 +219,82 @@ def verify_const_matrix(programs, tests, const_matrix):
                 print("Const mat: %d" % is_const_mat)
                 return False
     return True
+
+########### Functions for formatting HumanEval/MBPP ############
+
+def format_humaneval_examples(problems, program_prompt_template, test_prompt_template):
+    """
+    Reads and formats HumanEval prompts based on program and test prompt templates. 
+    Note that the HumanEval docstrings contain test cases, so these are removed for test 
+    case generation prompts to avoid redundancy. Returns prompts that can be used to generate 
+    programs and test cases based on HumanEval problems.
+
+    problems: object returns from humaneval read_problems() function
+    program_prompt_template: f string for program prompt formatting
+    test_prompt_template: f string for test prompt formatting
+    """
+
+    def remove_testcase_from_prompt(problem):
+        """
+        Removes test cases from HumanEval prompts (for unbiased test synthesis)
+        """
+        prompt = problem["prompt"]
+        function_name = problem["entry_point"] + "("
+        testcase_idx1 = prompt.find(">>>")
+        function_idxs = [i for i in range(len(prompt)) if prompt.startswith(function_name, i)]
+        if len(function_idxs) > 1:
+            testcase_idx2 = function_idxs[1]
+        else:
+            testcase_idx2 = testcase_idx1
+        
+        testcase_min = min(testcase_idx1, testcase_idx2)
+        testcase_max = max(testcase_idx1, testcase_idx2)
+
+        if testcase_min == -1:
+            testcase_use_idx = testcase_max
+        else:
+            testcase_use_idx = testcase_min
+        
+        res_prompt = prompt[:testcase_use_idx] + "\"\"\"" + "\n"
+        return res_prompt
+
+    program_prompts = []
+    test_prompts = []
+    for task_id in problems:                
+        test_init_prompt = remove_testcase_from_prompt(problems[task_id])
+        test_prompt = test_prompt_template.format(test_init_prompt)
+        test_prompts.append(test_prompt)
+
+        program_init_prompt = problems[task_id]["prompt"]
+        program_prompt = program_prompt_template.format(program_init_prompt)
+        program_prompts.append(program_prompt)
+
+    return program_prompts, test_prompts
+
+
+def format_mbpp_examples(data_path, program_prompt_template, test_prompt_template):
+    """
+    Reads and formats MBPP prompts based on passed in prompt templates; returns prompts 
+    for generating programs and test cases based on MBPP problems.
+
+    data_path: jsonl file with the following fields
+        program_ctx: extracted function header used for generating programs 
+                     (may include relevant test cases in docstring)
+        test_ctx: extracted function header used for generating tests 
+                    (SHOULD NOT include relevant test cases in docstring)
+    program_prompt_template: f string for program prompt formatting
+    test_prompt_template: f string for test prompt formatting
+    """
+    with open(data_path) as f:
+        examples = [json.loads(line) for line in f]  
+
+    program_prompts = []
+    test_prompts = []
+    for i in range(len(examples)):
+        ex = examples[i]
+        program_ctx, test_ctx = ex['program_ctx'], ex['test_ctx']
+        program_prompt_format = program_prompt_template.format(program_ctx)
+        test_prompt_format = test_prompt_template.format(test_ctx)
+        program_prompts.append(program_prompt_format)
+        test_prompts.append(test_prompt_format)
+    return program_prompts, test_prompts
