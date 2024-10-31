@@ -91,12 +91,12 @@ def sft_trainer(model_args, data_args, training_args):
             json_template = json.load(f)
         prompt_template = json_template['prompt_template']
     else:
-        # Default prompt template is the program itself
+        # Default prompt template is the input itself
         prompt_template = "{}"
 
     def preprocess_fn(example):
         # Apply prompt template to input program and tokenize
-        prompt = prompt_template.format(example['program'])
+        prompt = prompt_template.format(example['test_ctx'])
         input_tokens = tokenizer(prompt, max_length = model_args.max_length, padding = 'max_length')
         output_tokens = tokenizer(example['test'], max_length = model_args.max_length, padding = 'max_length')
         input_tokens['labels'] = output_tokens['input_ids']

@@ -5,6 +5,8 @@ import numpy as np
 import time
 import os
 import sys
+import gzip
+import json
 
 """
 Timer for executed programs. Waits a specified number of seconds 
@@ -146,6 +148,26 @@ def execute_testcase(x, y):
     except:
         sys.stdout = old_stdout
         return None
+
+# Taken from Open-AI's HumanEval GitHub: https://github.com/openai/human-eval/tree/master
+def write_jsonl(filename, data, append = False):
+    """
+    Writes an iterable of dictionaries to jsonl
+    """
+    if append:
+        mode = 'ab'
+    else:
+        mode = 'wb'
+    filename = os.path.expanduser(filename)
+    if filename.endswith(".gz"):
+        with open(filename, mode) as fp:
+            with gzip.GzipFile(fileobj=fp, mode='wb') as gzfp:
+                for x in data:
+                    gzfp.write((json.dumps(x) + "\n").encode('utf-8'))
+    else:
+        with open(filename, mode) as fp:
+            for x in data:
+                fp.write((json.dumps(x) + "\n").encode('utf-8'))
         
 
 def subsample_matrix(matrix, n, m):
