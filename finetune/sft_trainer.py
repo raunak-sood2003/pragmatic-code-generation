@@ -1,7 +1,8 @@
-from datasets import load_dataset
-from dataclasses import dataclass, field
 import json
+import os
 from typing import Optional
+from dataclasses import dataclass, field
+from datasets import load_dataset
 from transformers import (
     AutoModelForCausalLM, 
     AutoTokenizer, 
@@ -65,20 +66,30 @@ class ModelArguments:
         }
     )
 
-    cache_dir : Optional[str] = field(
+    hf_dir : Optional[str] = field(
         default = None,
         metadata = {
-            "help": "Where to store the pretrained models downloaded from huggingface.co"
+            "help": "Path to HF_HOME dir for model checkpoints and saved data sets"
+        },
+    )
+    
+    wandb_dir : Optional[str] = field(
+        default = None,
+        metadata = {
+            "help": "Where to store wandb logs during training"
         },
     )
 
 def sft_trainer(model_args, data_args, training_args):
+    os.environ['HF_HOME'] = model_args.hf_dir
+    os.environ["WANDB_DIR"] = model_args.wandb_dir
+
     dataset = load_dataset(
         "json", 
         data_files = {
             "train" : data_args.train_file, 
-            "validation" : data_args.validation_file}, 
-        cache_dir = model_args.cache_dir
+            "validation" : data_args.validation_file
+        }
     )
     
     train_dataset, val_dataset = dataset['train'], dataset['validation']
@@ -97,8 +108,8 @@ def sft_trainer(model_args, data_args, training_args):
     def preprocess_fn(example):
         # Apply prompt template to input program and tokenize
         prompt = prompt_template.format(example['test_ctx'])
-        input_tokens = tokenizer(prompt, max_length = model_args.max_length, padding = 'max_length')
-        output_tokens = tokenizer(example['test'], max_length = model_args.max_length, padding = 'max_length')
+        input_tokens = tokenizer(prompt, max_length = model_args.max_length, truncation = True, padding = 'max_length')
+        output_tokens = tokenizer(example['tests'], max_length = model_args.max_length, truncation = True, padding = 'max_length')
         input_tokens['labels'] = output_tokens['input_ids']
         return input_tokens
     
@@ -106,7 +117,7 @@ def sft_trainer(model_args, data_args, training_args):
     tokenized_val_dataset = val_dataset.map(preprocess_fn)
 
     config = AutoConfig.from_pretrained(model_args.model_name_or_path)
-    model = AutoModelForCausalLM.from_pretrained(model_args.model_name_or_path, config = config, cache_dir = model_args.cache_dir)
+    model = AutoModelForCausalLM.from_pretrained(model_args.model_name_or_path, config = config, device_map = "auto")
     data_collator = DataCollatorWithPadding(tokenizer = tokenizer)
 
     trainer = Trainer(

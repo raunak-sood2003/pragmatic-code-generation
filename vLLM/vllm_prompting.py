@@ -2,7 +2,8 @@ from openai import OpenAI
 import os
 from tqdm import tqdm
 from human_eval.data import write_jsonl, read_problems
-from ..src.utils import extract_function, extract_testcase, format_humaneval_examples, format_mbpp_examples
+from ..src.utils import extract_function, extract_testcase
+from ..src.data import format_humaneval_examples, format_mbpp_examples
 import json
 import fire
 
