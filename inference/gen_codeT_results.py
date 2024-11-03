@@ -67,7 +67,7 @@ def generate_codeT_results(num_programs, num_tests, num_input_tests, num_ransac_
     os.system("python3 -m evalplus.evaluate --dataset humaneval --samples %s" % (res_dir))
 
     res_result_dir = res_dir[:-6] + "_eval_results" + ".json"
-    with open(res_result_dir) as f:
+    with open(res_result_dir, 'w') as f:
         eval_res_json = json.load(f)
     
     res_json = {}

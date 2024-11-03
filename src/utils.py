@@ -163,7 +163,7 @@ def valid_program_testcase_pair(x, y):
     
 def execute_testcase(x, y):
     '''
-    Executes a program (x) on a test case (y) in unittest format.
+    Executes a program (x) on a test case (y) and returns the result.
     '''
     if len(x) == 0 or len(y) == 0:
         return None
