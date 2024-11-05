@@ -9,13 +9,14 @@ import pdb
 from datasets import load_dataset
 
 
+def extract_code_blocks(text: str) -> List[str]:
+    """Extract Python code blocks from text that are wrapped in ```python ... ``` markers"""
+    pattern = r"```python\n(.*?)```"
+    matches = re.finditer(pattern, text, re.DOTALL)
+    return [match.group(1).strip() for match in matches]
+
+
 class HumanEvalSolver:
-    @staticmethod
-    def extract_code_blocks(text: str) -> List[str]:
-        """Extract Python code blocks from text that are wrapped in ```python ... ``` markers"""
-        pattern = r"```python\n(.*?)```"
-        matches = re.finditer(pattern, text, re.DOTALL)
-        return [match.group(1).strip() for match in matches]
 
     def __init__(self):
         self.client = anthropic.Client()
@@ -36,11 +37,11 @@ Each test case should get its own function.
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=256,
+            max_tokens=1024,
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
-        return self.extract_code_blocks(response.content[0].text)[0]
+        return extract_code_blocks(response.content[0].text)[0]
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
         prompt = f"""Write a Python implementation for the following function:
@@ -55,13 +56,13 @@ code
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=256,
+            max_tokens=1024,
             temperature=0.7,
             messages=[{"role": "user", "content": prompt}],
             n=n_samples
         )
         
-        return [self.extract_code_blocks(message.text)[0] for message in response.content]
+        return [extract_code_blocks(message.text)[0] for message in response.content]
 
     def evaluate_solution(self, code: str, entry_point: str, test_code: str) -> bool:
         request_code = f"{code}\n{test_code}"
