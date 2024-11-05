@@ -5,6 +5,11 @@ Recently, LLMs have shown remarkable success on code generation tasks such as na
 
 
 ## Best-of-n with self-generated tests
+Start the eval server with
+```
+uv run modal serve app/server.py
+```
+Run the method on one (for now) humaneval example with
 ```
 uv run python prompt.py
 ```
