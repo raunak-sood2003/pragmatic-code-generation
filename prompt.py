@@ -4,6 +4,7 @@ import requests
 import json
 from typing import List, Tuple, Dict
 import time
+import re
 import pdb
 from datasets import load_dataset
 
@@ -15,13 +16,16 @@ class HumanEvalSolver:
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_tests(self, problem: Dict) -> str:
-        prompt = f"""
-        Write comprehensive test cases for the following function:
+        prompt = f"""Write comprehensive test cases for the following function:
+{problem['prompt']}
+    ...
 
-        {problem['prompt']}
-
-        Return only the test cases in Python code format.
-        """
+Return only the test cases in Python code format, wrapped like
+```python
+code
+```
+Each test case should get its own function.
+"""
 
         response = self.client.messages.create(
             model=self.model,
@@ -32,13 +36,15 @@ class HumanEvalSolver:
         return response.content[0].text
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
-        prompt = f"""
-        Write a Python implementation for the following function:
+        prompt = f"""Write a Python implementation for the following function:
 
-        {problem['prompt']}
+{problem['prompt']}
 
-        Return only the implementation code, no explanations.
-        """
+Return only the implementation code, no explanations:
+```python
+code
+```
+"""
 
         response = self.client.messages.create(
             model=self.model,
@@ -90,13 +96,12 @@ class HumanEvalSolver:
 
 def main():
     # Load HumanEval dataset
-    dataset = load_dataset("openai_humaneval", split="text")
+    dataset = load_dataset("openai_humaneval", split="test")
     
     solver = HumanEvalSolver()
 
     ranked_solutions = solver.solve_problem(dataset[0])
 
-    print(f"Solutions for problem: {problems[0]['entry_point']}")
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
         print("Solution:")
