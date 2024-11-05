@@ -5,6 +5,7 @@ import json
 from typing import List, Tuple, Dict
 import time
 import pdb
+from datasets import load_dataset
 
 
 class HumanEvalSolver:
@@ -92,32 +93,22 @@ class HumanEvalSolver:
 
 
 def main():
+    # Load HumanEval dataset
+    dataset = load_dataset("openai_humaneval")
+    problems = dataset["test"]
+    
     solver = HumanEvalSolver()
 
-    # Example problem from HumanEval
-    example_problem = {
-        "prompt": """
-        def add(x: int, y: int) -> int:
-            \"\"\"Add two numbers x and y
-            >>> add(2, 3)
-            5
-            >>> add(5, 7)
-            12
-            \"\"\"
-        """,
-        "entry_point": "add",
-        "test": """
-        def test_add():
-            assert add(2, 3) == 5
-            assert add(5, 7) == 12
-            assert add(0, 0) == 0
-            assert add(-1, 1) == 0
-        """,
+    # Process first problem as an example
+    problem = {
+        "prompt": problems[0]["prompt"],
+        "entry_point": problems[0]["entry_point"],
+        "test": problems[0]["test"]
     }
 
-    ranked_solutions = solver.solve_problem(example_problem)
+    ranked_solutions = solver.solve_problem(problem)
 
-    print("Ranked solutions:")
+    print(f"Solutions for problem: {problems[0]['entry_point']}")
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
         print("Solution:")
