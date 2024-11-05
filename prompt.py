@@ -16,8 +16,23 @@ def extract_code_blocks(text: str) -> List[str]:
     return [match.group(1).strip() for match in matches]
 
 
-class HumanEvalSolver:
+def convert_humaneval_tests(test_code, entrypoint):
+    # Split the input into lines and clean up
+    lines = test_code.strip().split("\n")
 
+    # Find all assert lines
+    assert_lines = [line for line in lines if line.lstrip().startswith("assert")]
+
+    # Generate individual test functions
+    test_functions = [f"candidate = {entrypoint}"]
+    for i, assert_line in enumerate(assert_lines, 1):
+        test_func = f"def test{i}():\n{assert_line}"
+        test_functions.append(test_func)
+
+    return "\n\n".join(test_functions)
+
+
+class HumanEvalSolver:
     def __init__(self):
         self.client = anthropic.Client()
         self.model = "claude-3-5-haiku-20241022"
@@ -48,7 +63,7 @@ Each test case should get its own function.
 
 {problem['prompt']}
 
-Return only the implementation code, no explanations:
+Return only the implementation code, no explanations. Be sure to include the relevant import statements:
 ```python
 code
 ```
@@ -59,31 +74,33 @@ code
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}]
+                temperature=1.0,
+                messages=[{"role": "user", "content": prompt}],
             )
             solutions.append(extract_code_blocks(response.content[0].text)[0])
-        
+
         return solutions
 
-    def evaluate_solution(self, code: str, entry_point: str, test_code: str) -> bool:
+    def evaluate_solution(self, code: str, test_code: str):
+        # Returns JSON report from pytest
         request_code = f"{code}\n{test_code}"
         response = requests.post(self.eval_url, json={"codes": [request_code]})
-        import pdb; pdb.set_trace()
         try:
-            return response.json()[0]["success"]
+            return response.json()[0]
         except Exception as e:
             print(f"Error evaluating solution: {e}")
             return False
 
     def rerank_solutions(
-        self, solutions: List[str], entry_point: str, test_code: str
+        self, solutions: List[str], test_code: str
     ) -> List[Tuple[str, float]]:
         scored_solutions = []
 
         for solution in solutions:
-            success = self.evaluate_solution(solution, entry_point, test_code)
-            scored_solutions.append((solution, float(success)))
+            report = self.evaluate_solution(solution, test_code)
+            successes = sum([test["outcome"] == "passed" for test in report["tests"]])
+            total = len(report["tests"])
+            scored_solutions.append((solution, successes / total))
 
         return sorted(scored_solutions, key=lambda x: x[1], reverse=True)
 
@@ -97,25 +114,25 @@ code
         solutions = self.generate_solutions(problem, n_samples)
 
         # Rerank solutions based on test performance
-        ranked_solutions = self.rerank_solutions(
-            solutions, problem["entry_point"], test_code
-        )
-
-        return ranked_solutions
+        return self.rerank_solutions(solutions, test_code)
 
 
 def main():
     # Load HumanEval dataset
     dataset = load_dataset("openai_humaneval", split="test")
-    
+    test_code = convert_humaneval_tests(dataset[0]["test"], dataset[0]["entry_point"])
+
     solver = HumanEvalSolver()
-
     ranked_solutions = solver.solve_problem(dataset[0])
-
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
         print("Solution:")
         print(solution)
+
+    report = solver.evaluate_solution(solution, test_code)
+    passed = all(test["outcome"] == "passed" for test in report["tests"])
+    print(passed)
+    pdb.set_trace()
 
 
 if __name__ == "__main__":
