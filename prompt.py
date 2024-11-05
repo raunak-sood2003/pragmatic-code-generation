@@ -32,27 +32,23 @@ class HumanEvalSolver:
         return response.content[0].text
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
-        solutions = []
+        prompt = f"""
+        Write a Python implementation for the following function:
 
-        for _ in range(n_samples):
-            prompt = f"""
-            Write a Python implementation for the following function:
+        {problem['prompt']}
 
-            {problem['prompt']}
+        Return only the implementation code, no explanations.
+        """
 
-            Return only the implementation code, no explanations.
-            """
-
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=256,
-                temperature=0.7,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            solutions.append(response.content[0].text.strip())
-            time.sleep(1)  # Rate limiting
-
-        return solutions
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=256,
+            temperature=0.7,
+            messages=[{"role": "user", "content": prompt}],
+            n=n_samples
+        )
+        
+        return [message.text.strip() for message in response.content]
 
     def evaluate_solution(self, code: str, entry_point: str, test_code: str) -> bool:
         request_code = f"{code}\n{test_code}"
