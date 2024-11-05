@@ -94,19 +94,11 @@ class HumanEvalSolver:
 
 def main():
     # Load HumanEval dataset
-    dataset = load_dataset("openai_humaneval")
-    problems = dataset["test"]
+    dataset = load_dataset("openai_humaneval", split="text")
     
     solver = HumanEvalSolver()
 
-    # Process first problem as an example
-    problem = {
-        "prompt": problems[0]["prompt"],
-        "entry_point": problems[0]["entry_point"],
-        "test": problems[0]["test"]
-    }
-
-    ranked_solutions = solver.solve_problem(problem)
+    ranked_solutions = solver.solve_problem(dataset[0])
 
     print(f"Solutions for problem: {problems[0]['entry_point']}")
     for solution, score in ranked_solutions:
