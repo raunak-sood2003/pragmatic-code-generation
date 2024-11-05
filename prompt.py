@@ -54,15 +54,17 @@ code
 ```
 """
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            temperature=0.7,
-            messages=[{"role": "user", "content": prompt}],
-            n=n_samples
-        )
+        solutions = []
+        for _ in range(n_samples):
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                temperature=0.7,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            solutions.append(extract_code_blocks(response.content[0].text)[0])
         
-        return [extract_code_blocks(message.text)[0] for message in response.content]
+        return solutions
 
     def evaluate_solution(self, code: str, entry_point: str, test_code: str) -> bool:
         request_code = f"{code}\n{test_code}"
