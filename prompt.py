@@ -102,6 +102,7 @@ code
             total = len(report["tests"])
             scored_solutions.append((solution, successes / total))
 
+        import pdb; pdb.set_trace()
         return sorted(scored_solutions, key=lambda x: x[1], reverse=True)
 
     def solve_problem(
