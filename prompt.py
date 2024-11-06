@@ -1,5 +1,5 @@
 import os
-import anthropic
+import openai
 import requests
 import json
 from typing import List, Tuple, Dict
@@ -34,8 +34,8 @@ def convert_humaneval_tests(test_code, entrypoint):
 
 class HumanEvalSolver:
     def __init__(self):
-        self.client = anthropic.Client()
-        self.model = "claude-3-5-haiku-20241022"
+        self.client = openai.Client()
+        self.model = "gpt-4-0125-preview"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_tests(self, problem: Dict) -> str:
@@ -50,13 +50,13 @@ code
 Each test case should get its own function.
 """
 
-        response = self.client.messages.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             max_tokens=1024,
             temperature=0,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": prompt}]
         )
-        return extract_code_blocks(response.content[0].text)[0]
+        return extract_code_blocks(response.choices[0].message.content)[0]
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
         prompt = f"""Write a Python implementation for the following function:
@@ -71,13 +71,13 @@ code
 
         solutions = []
         for _ in range(n_samples):
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=1024,
                 temperature=1.0,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": prompt}]
             )
-            solutions.append(extract_code_blocks(response.content[0].text)[0])
+            solutions.append(extract_code_blocks(response.choices[0].message.content)[0])
 
         return solutions
 
