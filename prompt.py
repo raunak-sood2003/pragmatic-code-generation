@@ -34,11 +34,11 @@ def convert_humaneval_tests(test_code, entrypoint):
 
 class HumanEvalSolver:
     def __init__(self):
-        together.api_key = os.getenv("TOGETHER_API_KEY")
-        self.model = "togethercomputer/llama-2-70b-chat"
+        self.client = together.Together()
+        self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
-    def generate_tests(self, problem: Dict) -> str:
+    def generate_tests(self, problem: Dict, n_samples: int) -> str:
         prompt = f"""Write comprehensive test cases for the following function:
 {problem['prompt']}
     ...
@@ -50,15 +50,20 @@ code
 Each test case should get its own function.
 """
 
-        response = together.Complete.create(
-            model=self.model,
-            prompt=prompt,
-            max_tokens=1024,
-            temperature=0,
-            top_p=0.7,
-            top_k=50,
-        )
-        return extract_code_blocks(response['output']['choices'][0]['text'])[0]
+        test_suites = []
+        for _ in range(n_samples):
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                temperature=0,
+                top_p=0.7,
+                top_k=50,
+            )
+            #print(response.choices[0].message.content)
+            test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
+
+        return test_suites 
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
         prompt = f"""Write a Python implementation for the following function:
@@ -73,15 +78,17 @@ code
 
         solutions = []
         for _ in range(n_samples):
-            response = together.Complete.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                prompt=prompt,
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
                 temperature=1.0,
                 top_p=0.7,
                 top_k=50,
             )
-            solutions.append(extract_code_blocks(response['output']['choices'][0]['text'])[0])
+            #print(response.choices[0].message.content)
+            #import pdb; pdb.set_trace()
+            solutions.append(extract_code_blocks(response.choices[0].message.content)[0])
         return solutions
 
     def evaluate_solution(self, code: str, test_code: str):
@@ -111,7 +118,7 @@ code
         self, problem: Dict, n_samples: int = 5
     ) -> List[Tuple[str, float]]:
         # Generate test cases
-        test_code = self.generate_tests(problem)
+        test_code = self.generate_tests(problem, n_samples)
 
         # Generate multiple solutions
         solutions = self.generate_solutions(problem, n_samples)
