@@ -5,7 +5,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "anthropic",
     "datasets>=3.0.2",
     "modal>=0.64.232",
     "sentencepiece>=0.2.0",

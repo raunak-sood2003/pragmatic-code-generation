@@ -69,17 +69,14 @@ code
 ```
 """
 
-        solutions = []
-        for _ in range(n_samples):
-            response = self.client.chat.completions.create(
-                model=self.model,
-                max_tokens=1024,
-                temperature=1.0,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            solutions.append(extract_code_blocks(response.choices[0].message.content)[0])
-
-        return solutions
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=1024,
+            temperature=1.0,
+            messages=[{"role": "user", "content": prompt}],
+            n=n_samples,
+        )
+        return [extract_code_blocks(choice.message.content)[0] for choice in response.choices]
 
     def evaluate_solution(self, code: str, test_code: str):
         # Returns JSON report from pytest
@@ -102,7 +99,6 @@ code
             total = len(report["tests"])
             scored_solutions.append((solution, successes / total))
 
-        import pdb; pdb.set_trace()
         return sorted(scored_solutions, key=lambda x: x[1], reverse=True)
 
     def solve_problem(
