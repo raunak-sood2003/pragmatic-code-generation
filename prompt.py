@@ -107,9 +107,9 @@ code
             print(f"Error evaluating solution: {e}")
             return False
 
-    def rerank_solutions(
+    def compute_test_solution_matrix(
         self, solutions: list[str], test_suites: list[str]
-    ) -> List[Tuple[str, float]]:
+    ):
         M = np.zeros((len(test_suites), len(solutions)))
 
         for i, test_code in enumerate(test_suites):
@@ -120,7 +120,7 @@ code
                 scored_solutions.append((solution, successes / total))
                 M[i,j] = successes / total
 
-        return sorted(scored_solutions, key=lambda x: x[1], reverse=True)
+        return M
 
     def solve_problem(
         self, problem: Dict, n_samples: int = 5
@@ -132,7 +132,10 @@ code
         solutions = self.generate_solutions(problem, n_samples)
 
         # Rerank solutions based on test performance
-        return self.rerank_solutions(solutions, test_code)
+        M = self.compute_test_solution_matrix(solutions, test_code)
+        import pdb; pdb.set_trace()
+        return
+        #return self.rerank_solutions(solutions, test_code)
 
 
 def main():
