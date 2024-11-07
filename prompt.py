@@ -6,6 +6,7 @@ from typing import List, Tuple, Dict
 import time
 import re
 import pdb
+import numpy as np
 from datasets import load_dataset
 
 
@@ -35,7 +36,8 @@ def convert_humaneval_tests(test_code, entrypoint):
 class HumanEvalSolver:
     def __init__(self):
         self.client = together.Together()
-        self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+        #self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+        self.model = "Qwen/Qwen2.5-7B-Instruct-Turbo"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_tests(self, problem: Dict, n_samples: int) -> str:
@@ -48,6 +50,8 @@ Return only the test cases in Python code format, wrapped like
 code
 ```
 Each test case should get its own function.
+
+Do not repeat the original function.
 """
 
         test_suites = []
@@ -59,6 +63,7 @@ Each test case should get its own function.
                 temperature=0,
                 top_p=0.7,
                 top_k=50,
+                stop=["<|eot_id|>","<|eom_id|>"],
             )
             #print(response.choices[0].message.content)
             test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
@@ -85,6 +90,7 @@ code
                 temperature=1.0,
                 top_p=0.7,
                 top_k=50,
+                stop=["<|eot_id|>","<|eom_id|>"],
             )
             #print(response.choices[0].message.content)
             #import pdb; pdb.set_trace()
@@ -102,15 +108,17 @@ code
             return False
 
     def rerank_solutions(
-        self, solutions: List[str], test_code: str
+        self, solutions: list[str], test_suites: list[str]
     ) -> List[Tuple[str, float]]:
-        scored_solutions = []
+        M = np.zeros((len(test_suites), len(solutions)))
 
-        for solution in solutions:
-            report = self.evaluate_solution(solution, test_code)
-            successes = sum([test["outcome"] == "passed" for test in report["tests"]])
-            total = len(report["tests"])
-            scored_solutions.append((solution, successes / total))
+        for i, test_code in enumerate(test_suites):
+            for j, solution in enumerate(solutions):
+                report = self.evaluate_solution(solution, test_code)
+                successes = sum([test["outcome"] == "passed" for test in report["tests"]])
+                total = len(report["tests"])
+                scored_solutions.append((solution, successes / total))
+                M[i,j] = successes / total
 
         return sorted(scored_solutions, key=lambda x: x[1], reverse=True)
 
