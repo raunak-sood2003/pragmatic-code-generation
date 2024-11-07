@@ -1,5 +1,5 @@
 import os
-import openai
+import together
 import requests
 import json
 from typing import List, Tuple, Dict
@@ -34,8 +34,8 @@ def convert_humaneval_tests(test_code, entrypoint):
 
 class HumanEvalSolver:
     def __init__(self):
-        self.client = openai.Client()
-        self.model = "gpt-4-0125-preview"
+        together.api_key = os.getenv("TOGETHER_API_KEY")
+        self.model = "togethercomputer/llama-2-70b-chat"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_tests(self, problem: Dict) -> str:
@@ -50,13 +50,15 @@ code
 Each test case should get its own function.
 """
 
-        response = self.client.chat.completions.create(
+        response = together.Complete.create(
             model=self.model,
+            prompt=prompt,
             max_tokens=1024,
             temperature=0,
-            messages=[{"role": "user", "content": prompt}]
+            top_p=0.7,
+            top_k=50,
         )
-        return extract_code_blocks(response.choices[0].message.content)[0]
+        return extract_code_blocks(response['output']['choices'][0]['text'])[0]
 
     def generate_solutions(self, problem: Dict, n_samples: int) -> List[str]:
         prompt = f"""Write a Python implementation for the following function:
@@ -69,14 +71,18 @@ code
 ```
 """
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            max_tokens=1024,
-            temperature=1.0,
-            messages=[{"role": "user", "content": prompt}],
-            n=n_samples,
-        )
-        return [extract_code_blocks(choice.message.content)[0] for choice in response.choices]
+        solutions = []
+        for _ in range(n_samples):
+            response = together.Complete.create(
+                model=self.model,
+                prompt=prompt,
+                max_tokens=1024,
+                temperature=1.0,
+                top_p=0.7,
+                top_k=50,
+            )
+            solutions.append(extract_code_blocks(response['output']['choices'][0]['text'])[0])
+        return solutions
 
     def evaluate_solution(self, code: str, test_code: str):
         # Returns JSON report from pytest
