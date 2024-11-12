@@ -1,5 +1,5 @@
 import json
-from src.utils import write_jsonl
+from .utils import write_jsonl
 
 def format_humaneval_examples(problems, program_prompt_template, test_prompt_template):
     """

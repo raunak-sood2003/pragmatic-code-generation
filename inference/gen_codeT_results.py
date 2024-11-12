@@ -7,11 +7,10 @@ import os
 from ..src.codeT import CodeT
 
 def generate_codeT_results(num_programs, num_tests, num_input_tests, num_ransac_samples, num_out_programs, \
-                           programs_dir, tests_dir, const_matrix_dir, res_dir, res_json_dir):
+                           programs_dir, tests_dir, canonical_programs_dir, const_matrix_dir, res_dir, res_json_dir):
     """
     Uses CodeT algorithm to re-rank model generated programs based on dual-execution agreement.
     """
-    N_HUMAN_EVAL_EXAMPLES = 164
     const_matrices = np.load(const_matrix_dir)
     const_matrices = const_matrices[:, :, :-1]
 
@@ -19,10 +18,22 @@ def generate_codeT_results(num_programs, num_tests, num_input_tests, num_ransac_
         json_programs = [json.loads(line) for line in f]
     with open(tests_dir) as f:
         json_tests = [json.loads(line) for line in f]
+    with open(canonical_programs_dir) as f:
+        json_canonical_programs = [json.loads(line) for line in f]
+    
+    task_ids = [program['task_id'] for program in json_canonical_programs]
+
+    # Determine if the dataset is HumanEval or MBPP (sanitized)
+    n_humaneval_problems = 164
+    n_mbpp_sanitize_problems = 427
+    if len(task_ids) == n_humaneval_problems:
+        dataset = "humaneval"
+    else:
+        assert(len(task_ids) == n_mbpp_sanitize_problems)
+        dataset = "mbpp"
 
     res_programs = []
-    for i in tqdm(range(N_HUMAN_EVAL_EXAMPLES)):
-        task_id = 'HumanEval/%d' % i
+    for i, task_id in tqdm(enumerate(task_ids)):
         const_matrix = const_matrices[i]
         tests = np.array([json_test['completion'] for json_test in json_tests[i * num_tests : i * num_tests + num_tests]])
         programs = np.array([json_program['completion'] for json_program in json_programs[i *  num_programs : i * num_programs + num_programs]])
@@ -64,15 +75,16 @@ def generate_codeT_results(num_programs, num_tests, num_input_tests, num_ransac_
                 res_programs.append({'task_id' : task_id, 'completion' : program})
     
     write_jsonl(res_dir, res_programs)
-    os.system("python3 -m evalplus.evaluate --dataset humaneval --samples %s" % (res_dir))
+    os.system("python3 -m evalplus.evaluate --dataset %s --samples %s" % (dataset, res_dir))
 
     res_result_dir = res_dir[:-6] + "_eval_results" + ".json"
-    with open(res_result_dir, 'w') as f:
+    with open(res_result_dir) as f:
         eval_res_json = json.load(f)
     
+    task_ids = list(eval_res_json['eval'].keys())
+    
     res_json = {}
-    for i in range(N_HUMAN_EVAL_EXAMPLES):
-        task_id = 'HumanEval/%d' % i
+    for i, task_id in enumerate(task_ids):
         res_program_json = eval_res_json["eval"][task_id]
         base_res = []
         plus_res = []

@@ -54,10 +54,10 @@ def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, ou
             res = []
             for j in range(len(responses[i])):
                 gen_code = responses[i][j] # NEED TO MAKE THIS GENERALIZED
-                if to_gen_tests:
-                    gen_code = extract_testcase(gen_code)
-                else:
-                    gen_code = extract_function(gen_code)
+                # if to_gen_tests:
+                #     gen_code = extract_testcase(gen_code)
+                # else:
+                #     gen_code = extract_function(gen_code)
                 res.append({"task_id" : task_id, "completion" : gen_code, "logprobs" : logprobs[i][j]})
 
             write_jsonl(output_dir, res, True)
@@ -128,8 +128,8 @@ def vllm_prompt_mbpp(model_name, port, to_gen_tests, num_generations, temperatur
         "n" : num_generations
     }
 
-    program_prompt_template = "# Complete the following function.\n{}"
-    test_prompt_template = "# Write test cases for the following function.\n{}\nassert"
+    program_prompt_template = "{}"
+    test_prompt_template = "{}"
     program_prompts, test_prompts = format_mbpp_examples(mbpp_dir, program_prompt_template, test_prompt_template)
     assert(len(program_prompts) == len(test_prompts))
 

@@ -160,6 +160,16 @@ def valid_program_testcase_pair(x, y):
     except:
         sys.stdout = old_stdout
         return False
+
+def create_const_matrix(programs, tests):
+    const_matrix = np.zeros([len(tests), len(programs)])
+    for i in range(len(tests)):
+        for j in range(len(programs)):
+            program = programs[j]
+            test = tests[i]
+            if valid_program_testcase_pair(program, test):
+                const_matrix[i][j] = 1
+    return const_matrix
     
 def execute_testcase(x, y):
     '''

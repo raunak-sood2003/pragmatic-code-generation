@@ -1,16 +1,19 @@
 import numpy as np
 import json
 from ..src.rsa import RSA
-from ..src.utils import write_jsonl
-from typing import Callable
-from const_matrix import create_const_matrix
-from agent import Speaker, Listener
+from ..src.utils import write_jsonl, extract_function, extract_testcase
+from typing import Callable, List
+from ..src.utils import create_const_matrix
+from .agent import Speaker, Listener
+import fire
+import torch
+import os
 
 class InferenceSpeakerListener:
     def __init__(self, 
                  speaker : Speaker, 
                  listener : Listener, 
-                 num_generations : int,
+                 num_generations : int = 1,
                  program_prompt_template : str = None,
                  test_prompt_template : str = None,
                  extract_program_fn : Callable = None, 
@@ -82,30 +85,146 @@ class InferenceSpeakerListener:
         rsa_testcase_idx = np.argmax(P_S1_truth)
         return gen_tests[rsa_testcase_idx]
     
-    def generate_pragmatic_testcases(self, program_ctx, testcase_ctx, true_program, num_tescases):
+    def generate_pragmatic_testcases_from_cache(self, gen_programs, gen_tests, const_matrix, num_testcases):
+        # De-deuplicating programs and tests
+        unique_programs = {}
+        unique_tests = {}
+        for j, program in enumerate(gen_programs):
+            unique_programs[program] = j
+        for j, test in enumerate(gen_tests):
+            unique_tests[test] = j
+        
+        program_idxs = np.array(list(unique_programs.values()))
+        test_idxs = np.array(list(unique_tests.values()))
+        
+        gen_programs = np.array(gen_programs)[program_idxs].tolist()
+        gen_tests = np.array(gen_tests)[test_idxs].tolist()
+        const_matrix = np.concatenate((const_matrix[test_idxs, :][:, program_idxs], const_matrix[test_idxs, -1].reshape(-1, 1)), axis = 1)
+
+        # Auto-regressively selecting pragmatic tests
         pragmatic_testcases = []
-        for _ in range(num_tescases):
-            next_testcase = self.generate_next_pragmatic_testcase(program_ctx, testcase_ctx, true_program, pragmatic_testcases)
-            if next_testcase is not None:
-                pragmatic_testcases.append(next_testcase)
+        const_matrix_update = np.copy(const_matrix)
+        for _ in range(num_testcases):
+            if const_matrix_update.size == 0:
+                break
+            P_L0 = RSA.normalize_rows(const_matrix_update)
+            P_S1 = RSA.normalize_cols(P_L0)
+            P_S1_truth = P_S1[:, -1]
+            if P_S1_truth.sum() != 0: 
+                rsa_testcase_idx = np.argmax(P_S1_truth)
+                pragmatic_testcases.append(gen_tests[rsa_testcase_idx])
+                # Auto-regressively update the const matrix
+                const_matrix_update = const_matrix_update[:, const_matrix_update[rsa_testcase_idx, :] == 1]
+                exclude = np.ones(const_matrix_update.shape[0], dtype = bool)
+                exclude[rsa_testcase_idx] = 0
+                const_matrix_update = const_matrix_update[exclude, :]
+                gen_tests = np.array(gen_tests)[exclude].tolist()
+                
         return pragmatic_testcases
     
-    def create_informative_dataset(self, num_testcases, train_json_dir, save_dir):
+    def generate_pragmatic_testcases(self, program_ctx, testcase_ctx, true_program, num_testcases, regen = False):
+        pragmatic_testcases = []
+        gen_programs, gen_tests, const_matrix = None, None, None # If we re-generate, we can't pick a single set of generations
+        if regen:
+            for _ in range(num_testcases):
+                next_testcase = self.generate_next_pragmatic_testcase(program_ctx, testcase_ctx, true_program, pragmatic_testcases)
+                if next_testcase is not None:
+                    pragmatic_testcases.append(next_testcase)
+        else:
+            gen_programs, gen_tests, const_matrix = self.generate_const_matrix(program_ctx, testcase_ctx, true_program)
+            pragmatic_testcases = self.generate_pragmatic_testcases_from_cache(gen_programs, gen_tests, const_matrix, num_testcases)
+        return gen_programs, gen_tests, const_matrix, pragmatic_testcases
+
+    
+    def create_informative_dataset(self, train_json_dir, save_dir, num_testcases = 1, regen = False, 
+                                   cached_gen_programs_dir = None, cached_gen_tests_dir = None, cached_const_matrices_dir = None):
         with open(train_json_dir) as f:
             train_json = [json.loads(line) for line in f]
         
-        train_res = []
-        for example in train_json:
-            program_ctx, testcase_ctx, true_program = example['program_ctx'], example['test_ctx'], example['program']
-            pragmatic_testcases = self.generate_pragmatic_testcases(program_ctx, testcase_ctx, true_program, num_testcases)
+        is_cached = (cached_gen_programs_dir is not None) and (cached_gen_tests_dir is not None) and (cached_const_matrices_dir is not None)
+        if is_cached:
+            with open(cached_gen_programs_dir) as f:
+                cached_gen_programs = [json.loads(line) for line in f]
+            with open(cached_gen_tests_dir) as f:
+                cached_gen_tests = [json.loads(line) for line in f]
+            cached_const_matrices = np.load(cached_const_matrices_dir)
+
+        res_train_dir = os.path.join(save_dir, 'dataset.jsonl')
+        res_programs_dir = os.path.join(save_dir, 'gen_programs.jsonl')
+        res_tests_dir = os.path.join(save_dir, 'gen_tests.jsonl')
+        res_const_matrices_dir = os.path.join(save_dir, 'const_matrices.npy')
+        res_const_matrices = np.zeros([len(train_json), self.num_generations, self.num_generations + 1])
+        
+        for i, example in enumerate(train_json):
+            task_id, program_ctx, testcase_ctx, true_program = example['task_id'], example['program_ctx'], example['test_ctx'], example['program']
+            if is_cached:
+                gen_programs = [example['completion'] for example in cached_gen_programs[i * self.num_generations : (i + 1) * self.num_generations]]
+                gen_tests = [example['completion'] for example in cached_gen_tests[i * self.num_generations : (i + 1) * self.num_generations]]
+                cached_const_matrix = cached_const_matrices[i]
+                pragmatic_testcases = self.generate_pragmatic_testcases_from_cache(gen_programs, gen_tests, cached_const_matrix, num_testcases)
+            else:
+                gen_programs, gen_tests, const_matrix, pragmatic_testcases = self.generate_pragmatic_testcases(program_ctx, testcase_ctx, true_program, num_testcases, regen)
+                if not regen:
+                    write_jsonl(res_programs_dir, [{'task_id' : task_id, 'completion' : program} for program in gen_programs], True)
+                    write_jsonl(res_tests_dir, [{'task_id' : task_id, 'completion' : test} for test in gen_tests], True)
+                    res_const_matrices[i] = const_matrix
+
             train_example = {
+                'task_id' : task_id,
                 'program_ctx' : program_ctx,
-                'testcase_ctx' : testcase_ctx,
+                'test_ctx' : testcase_ctx,
                 'program' : true_program,
-                'test' : "\n".join(pragmatic_testcases)
+                'test' : "\n".join(pragmatic_testcases),
+                'debug_tests' : pragmatic_testcases
             }
-            train_res.append(train_example)
-        write_jsonl(save_dir, train_res)
+            write_jsonl(res_train_dir, [train_example], True)
+        
+        np.save(res_const_matrices_dir, res_const_matrices)
+
+if __name__ == '__main__':
+    # model_name_or_path = 'Salesforce/codegen-350M-mono'
+    model_name_or_path = 'codellama/CodeLlama-13b-hf'
+    gen_config = {
+        'temperature' : 0.8,
+        'max_new_tokens' : 128,
+        'do_sample' : True
+    }
+    
+    os.environ["CUDA_VISIBLE_DEVICES"] = '1' # IDK why but u need this
+    
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    # speaker = Speaker(
+    #     model_name_or_path,
+    #     gen_config,
+    #     device
+    # )
+
+    # listener = Listener(
+    #     model_name_or_path,
+    #     gen_config,
+    #     device
+    # )
+
+    speaker, listener = None, None
+
+    num_generations = 100
+    program_prompt_template = "# Complete the following function.\n{}"
+    test_prompt_template = "# Write test cases for the following function.\n{}    pass\n\nassert"
+
+    inference = InferenceSpeakerListener(speaker, listener, num_generations, program_prompt_template, test_prompt_template, extract_function, extract_testcase)
+
+    train_json_dir = '/home/rrsood/CodeGen/test_training/humaneval_test_dataset.jsonl'
+    save_dir = '/home/rrsood/CodeGen/test_training/'
+    num_testcases = 5
+    cached_gen_programs_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl'
+    cached_gen_tests_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_tests_k100_temp0.8.jsonl'
+    cached_const_matrices_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/const-matrices/codellama_humaneval_const_matrix.npy'
+
+    inference.create_informative_dataset(train_json_dir, save_dir, num_testcases, False, cached_gen_programs_dir, cached_gen_tests_dir, cached_const_matrices_dir)
+
+
+    
         
 
 
