@@ -9,7 +9,8 @@ Start the eval server with
 ```
 uv run modal serve app/server.py
 ```
-Run the method on one (for now) humaneval example with
+Run the method on one (for now) humaneval/mbpp example with
 ```
-uv run python prompt.py
+uv run python prompt.py --dataset=openai_humaneval
+uv run python prompt.py --dataset=mbpp
 ```
