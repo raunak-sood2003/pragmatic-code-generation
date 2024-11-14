@@ -1498,6 +1498,7 @@ name = "testgen"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "datasets" },
     { name = "fire" },
     { name = "modal" },
@@ -1510,6 +1511,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.10.10" },
     { name = "datasets", specifier = ">=3.0.2" },
     { name = "fire", specifier = ">=0.7.0" },
     { name = "modal", specifier = ">=0.64.232" },

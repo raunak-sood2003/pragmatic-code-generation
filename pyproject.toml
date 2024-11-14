@@ -13,4 +13,5 @@ dependencies = [
     "transformers>=4.46.0",
     "openai",
     "fire>=0.7.0",
+    "aiohttp>=3.10.10",
 ]
