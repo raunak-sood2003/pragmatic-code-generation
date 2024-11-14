@@ -103,16 +103,19 @@ class Solver:
     ):
         M = np.zeros((len(test_suites), len(solutions)))
         tasks = []
+        indices = []
         
         # Create all evaluation tasks
         for i, test_code in enumerate(test_suites):
             for j, solution in enumerate(solutions):
-                task = asyncio.create_task(self.evaluate_solution(solution, test_code))
-                tasks.append((i, j, task))
+                tasks.append(self.evaluate_solution(solution, test_code))
+                indices.append((i, j))
         
-        # Wait for all tasks to complete
-        for i, j, task in tasks:
-            report = await task
+        # Wait for all tasks to complete concurrently
+        results = await asyncio.gather(*tasks)
+        
+        # Process results
+        for (i, j), report in zip(indices, results):
             if report and "tests" in report:
                 successes = sum([test["outcome"] == "passed" for test in report["tests"]])
                 total = len(report["tests"])
