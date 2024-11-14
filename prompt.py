@@ -1,8 +1,9 @@
 import os
 import together
-import requests
+import aiohttp
 import fire
 import json
+import asyncio
 from typing import List, Tuple, Dict
 import time
 import re
@@ -85,26 +86,38 @@ class Solver:
             test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
         return test_suites
 
-    def evaluate_solution(self, code: str, test_code: str):
+    async def evaluate_solution(self, code: str, test_code: str):
         # Returns JSON report from pytest
         request_code = f"{code}\n{test_code}"
-        response = requests.post(self.eval_url, json={"codes": [request_code]})
-        try:
-            return response.json()[0]
-        except Exception as e:
-            print(f"Error evaluating solution: {e}")
-            return False
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.eval_url, json={"codes": [request_code]}) as response:
+                try:
+                    result = await response.json()
+                    return result[0]
+                except Exception as e:
+                    print(f"Error evaluating solution: {e}")
+                    return False
 
-    def compute_test_solution_matrix(
+    async def compute_test_solution_matrix(
         self, solutions: list[str], test_suites: list[str]
     ):
         M = np.zeros((len(test_suites), len(solutions)))
+        tasks = []
+        
+        # Create all evaluation tasks
         for i, test_code in enumerate(test_suites):
             for j, solution in enumerate(solutions):
-                report = self.evaluate_solution(solution, test_code)
+                task = asyncio.create_task(self.evaluate_solution(solution, test_code))
+                tasks.append((i, j, task))
+        
+        # Wait for all tasks to complete
+        for i, j, task in tasks:
+            report = await task
+            if report and "tests" in report:
                 successes = sum([test["outcome"] == "passed" for test in report["tests"]])
                 total = len(report["tests"])
                 M[i,j] = successes / total
+        
         return M
 
     def rerank_solutions(self, test_code: list[str], solutions: list[str], M: np.array):
@@ -114,7 +127,7 @@ class Solver:
         ordering = scores.argsort()
         return [(solutions[x], scores[x]) for x in ordering]
 
-    def solve_problem(
+    async def solve_problem(
         self, prompt: str, n_samples: int = 5
     ) -> List[Tuple[str, float]]:
         # Generate test cases
@@ -126,7 +139,7 @@ class Solver:
         # Rerank solutions based on test performance
         # Rows are test suites
         # Columns are solutions
-        M = self.compute_test_solution_matrix(solutions, test_code)
+        M = await self.compute_test_solution_matrix(solutions, test_code)
         return self.rerank_solutions(test_code, solutions, M)
 
 
@@ -186,14 +199,14 @@ code
 """
 
 
-def main(dataset="openai_humaneval"):
+async def main(dataset="openai_humaneval"):
     assert dataset in ["openai_humaneval", "mbpp"]
     if dataset == "openai_humaneval":
         # Load HumanEval dataset
         dataset = load_dataset("openai_humaneval", split="test")
         test_code = convert_humaneval_tests(dataset[0]["test"], dataset[0]["entry_point"])
         solver = HumanEvalSolver()
-        ranked_solutions = solver.solve_problem(dataset[0]["prompt"].rstrip())
+        ranked_solutions = await solver.solve_problem(dataset[0]["prompt"].rstrip())
     elif dataset == "mbpp":
         dataset = load_dataset("mbpp", split="test")
         example = dataset[0]
@@ -201,7 +214,7 @@ def main(dataset="openai_humaneval"):
         prompt_tests = convert_mbpp_tests(example["test_list"])
         prompt = example["text"] + "\n" + prompt_tests
         solver = MbppSolver()
-        ranked_solutions = solver.solve_problem(prompt)
+        ranked_solutions = await solver.solve_problem(prompt)
 
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
@@ -215,4 +228,4 @@ def main(dataset="openai_humaneval"):
 
 
 if __name__ == "__main__":
-    fire.Fire(main)
+    fire.Fire(lambda *args, **kwargs: asyncio.run(main(*args, **kwargs)))
