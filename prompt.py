@@ -34,11 +34,11 @@ def convert_humaneval_tests(test_code, entrypoint):
     return "\n\n".join(test_functions)
 
 
-def convert_mbpp_tests(assert_list, entrypoint):
+def convert_mbpp_tests(assert_list):
     # Generate individual test functions
     test_functions = []
     for i, assert_line in enumerate(assert_list, 1):
-        test_func = f"def test{i}():\n{assert_line}"
+        test_func = f"def test{i}():\n    {assert_line}"
         test_functions.append(test_func)
 
     return "\n\n".join(test_functions)
@@ -77,14 +77,12 @@ class Solver:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
-                temperature=0,
+                temperature=1.0,
                 top_p=0.7,
                 top_k=50,
                 stop=["<|eot_id|>","<|eom_id|>"],
             )
-            #print(response.choices[0].message.content)
             test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
-
         return test_suites
 
     def evaluate_solution(self, code: str, test_code: str):
@@ -101,43 +99,53 @@ class Solver:
         self, solutions: list[str], test_suites: list[str]
     ):
         M = np.zeros((len(test_suites), len(solutions)))
-
         for i, test_code in enumerate(test_suites):
             for j, solution in enumerate(solutions):
                 report = self.evaluate_solution(solution, test_code)
                 successes = sum([test["outcome"] == "passed" for test in report["tests"]])
                 total = len(report["tests"])
-                scored_solutions.append((solution, successes / total))
                 M[i,j] = successes / total
-
         return M
 
+    def rerank_solutions(self, test_code: list[str], solutions: list[str], M: np.array):
+        # naive sum over tests passed in total
+        scores = M.sum(0)
+        # from worst to best
+        ordering = scores.argsort()
+        return [(solutions[x], scores[x]) for x in ordering]
+
     def solve_problem(
-        self, problem: Dict, n_samples: int = 5
+        self, prompt: str, n_samples: int = 5
     ) -> List[Tuple[str, float]]:
         # Generate test cases
-        test_code = self.generate_tests(problem, n_samples)
+        test_code = self.generate_tests(prompt, n_samples)
 
         # Generate multiple solutions
-        solutions = self.generate_solutions(problem, n_samples)
+        solutions = self.generate_solutions(prompt, n_samples)
 
         # Rerank solutions based on test performance
+        # Rows are test suites
+        # Columns are solutions
         M = self.compute_test_solution_matrix(solutions, test_code)
-        import pdb; pdb.set_trace()
-        return
-        #return self.rerank_solutions(solutions, test_code)
+        return self.rerank_solutions(test_code, solutions, M)
 
 
 class HumanEvalSolver(Solver):
     TEST_PROMPT = """Write comprehensive test cases for the following function:
+```
 {prompt}
     ...
+```
 
 Return only the test cases in Python code format, wrapped like
 ```python
-code
+def test_description1():
+    assert ...
+
+def test_description2():
+    assert ...
 ```
-Each test case should get its own function.
+Each test case should get its own function and have a descriptive name.
 
 Do not repeat the original function.
 """
@@ -154,13 +162,16 @@ code
 class MbppSolver(Solver):
     TEST_PROMPT = """Write comprehensive test cases for the following prompt:
 {prompt}
-    ...
 
 Return only the test cases in Python code format, wrapped like
 ```python
-code
+def test_description1():
+    assert ...
+
+def test_description2():
+    assert ...
 ```
-Each test case should get its own function.
+Each test case should get its own function and have a descriptive name.
 
 Do not repeat the original function.
 """
@@ -182,11 +193,16 @@ def main(dataset="openai_humaneval"):
         dataset = load_dataset("openai_humaneval", split="test")
         test_code = convert_humaneval_tests(dataset[0]["test"], dataset[0]["entry_point"])
         solver = HumanEvalSolver()
+        ranked_solutions = solver.solve_problem(dataset[0]["prompt"].rstrip())
     elif dataset == "mbpp":
-        dataset = load_dataset("openai_humaneval", split="test")
-        test_code = convert_mbpp_tests(dataset[0]["test"], dataset[0]["entry_point"])
+        dataset = load_dataset("mbpp", split="test")
+        example = dataset[0]
+        test_code = convert_mbpp_tests(example["test_list"] + example["challenge_test_list"])
+        prompt_tests = convert_mbpp_tests(example["test_list"])
+        prompt = example["text"] + "\n" + prompt_tests
         solver = MbppSolver()
-    ranked_solutions = solver.solve_problem(dataset[0])
+        ranked_solutions = solver.solve_problem(prompt)
+
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
         print("Solution:")
