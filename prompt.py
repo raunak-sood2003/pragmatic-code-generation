@@ -207,9 +207,10 @@ async def main(dataset="openai_humaneval"):
     if dataset == "openai_humaneval":
         # Load HumanEval dataset
         dataset = load_dataset("openai_humaneval", split="test")
-        test_code = convert_humaneval_tests(dataset[0]["test"], dataset[0]["entry_point"])
+        example = dataset[0]
+        test_code = convert_humaneval_tests(example["test"], example["entry_point"])
         solver = HumanEvalSolver()
-        ranked_solutions = await solver.solve_problem(dataset[0]["prompt"].rstrip())
+        ranked_solutions = await solver.solve_problem(example["prompt"].rstrip())
     elif dataset == "mbpp":
         dataset = load_dataset("mbpp", split="test")
         example = dataset[0]
