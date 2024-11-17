@@ -41,7 +41,7 @@ def prompt_vllm(model_name, samples, api_base, params, dataset, to_gen_tests, ou
             response = client.completions.create(
                 model=model_name,
                 prompt=sample,
-                logprobs=False,
+                logprobs=True,
                 stream=False,
                 **params)
 

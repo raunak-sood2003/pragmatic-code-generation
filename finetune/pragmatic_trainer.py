@@ -43,7 +43,7 @@ class InferenceSpeakerListener:
         else:
             self.test_prompt_template = test_prompt_template
     
-    def generate_const_matrix(self, program_ctx, testcase_ctx, true_program, pragmatic_testcases = None):
+    def generate_const_matrix(self, program_ctx, testcase_ctx, true_program, pragmatic_testcases = []):
         program_prompt = self.program_prompt_template.format(program_ctx)
         test_prompt = self.test_prompt_template.format(testcase_ctx)
         
@@ -52,25 +52,51 @@ class InferenceSpeakerListener:
         
         programs = [self.extract_program_fn(output) for output in listener_outputs]
         tests = [self.extract_testcase_fn(output) for output in speaker_outputs]
-
-        gen_programs, gen_tests = programs.copy(), tests.copy()
         
         programs.append(true_program)
-        if pragmatic_testcases is not None:
+        if len(pragmatic_testcases) > 0:
             tests.extend(pragmatic_testcases)
-        return gen_programs, gen_tests, create_const_matrix(programs, tests)
+        return programs, tests, create_const_matrix(programs, tests)
 
     def generate_next_pragmatic_testcase(self, program_ctx, testcase_ctx, true_program, pragmatic_testcases):
         gen_programs, gen_tests, const_matrix = self.generate_const_matrix(program_ctx, testcase_ctx, true_program, pragmatic_testcases)
+        # De-duplcating generated programs and tests
+        new_programs = gen_programs[:-1]
+        new_tests = gen_tests[:-len(pragmatic_testcases)] if len(pragmatic_testcases) > 0 else gen_tests
+        unique_programs, unique_tests = set(), set()
+        duplicate_program_idxs, duplicate_test_idxs = [], []
+        for j, program in enumerate(new_programs):
+            if program in unique_programs:
+                duplicate_program_idxs.append(j)
+            else:
+                unique_programs.add(program)
+        for j, test in enumerate(new_tests):
+            if test in unique_tests:
+                duplicate_test_idxs.append(j)
+            else:
+                unique_tests.add(test)
+        
+        # Update gen_programs, gen_tests and const_matrix
+        program_mask = np.ones([len(gen_programs)], dtype = bool)
+        program_mask[np.array(duplicate_program_idxs, dtype = int)] = False
+        gen_programs = np.array(gen_programs)[program_mask].tolist()
+
+        test_mask = np.ones([len(gen_tests)], dtype = bool)
+        test_mask[np.array(duplicate_test_idxs, dtype = int)] = False
+        gen_tests = np.array(gen_tests)[test_mask].tolist()
+
+        const_matrix = const_matrix[test_mask, :][:, program_mask]
+        
+        # Auto-regressively update const matrix given existing pragmatic test cases
         len_prag_tests = len(pragmatic_testcases)
         if len_prag_tests > 0:
-            # Auto-regressive step
             prag_tests_const = const_matrix[-len_prag_tests:, :] == 1
             all_prag_tests_const = np.logical_and.reduce(prag_tests_const)
             const_matrix = const_matrix[:, all_prag_tests_const]
         if const_matrix.size == 0:
             return None
         
+        # RSA on updated const matrix
         P_L0 = RSA.normalize_rows(const_matrix)
         P_S1 = RSA.normalize_cols(P_L0)
         if len_prag_tests > 0:
@@ -79,8 +105,8 @@ class InferenceSpeakerListener:
         else:
             P_S1_truth = P_S1[:, -1]
         
-        if P_S1_truth.sum() == 0: 
-            # If there are no consistent tests
+        if P_S1_truth.size == 0 or P_S1_truth.sum() == 0: 
+            # If there are no new consistent tests
             return None
         rsa_testcase_idx = np.argmax(P_S1_truth)
         return gen_tests[rsa_testcase_idx]
@@ -181,18 +207,46 @@ class InferenceSpeakerListener:
         
         np.save(res_const_matrices_dir, res_const_matrices)
 
-if __name__ == '__main__':
-    # model_name_or_path = 'Salesforce/codegen-350M-mono'
-    model_name_or_path = 'codellama/CodeLlama-13b-hf'
+def main(model_name_or_path, temperature, max_new_tokens, num_generations, num_testcases, regen, train_json_dir, save_dir):
+    device = "cuda" #if torch.cuda.is_available() else "cpu"
+
     gen_config = {
-        'temperature' : 0.8,
-        'max_new_tokens' : 128,
+        'temperature' : temperature,
+        'max_new_tokens' : max_new_tokens,
         'do_sample' : True
     }
+
+    speaker = Speaker(
+        model_name_or_path,
+        gen_config,
+        device
+    )
+
+    listener = Listener(
+        model_name_or_path,
+        gen_config,
+        device
+    )
+
+    program_prompt_template = "# Complete the following function.\n{}"
+    test_prompt_template = "# Write test cases for the following function.\n{}    pass\n\nassert"
+
+    inference = InferenceSpeakerListener(speaker, listener, num_generations, program_prompt_template, test_prompt_template, extract_function, extract_testcase)
+    inference.create_informative_dataset(train_json_dir, save_dir, num_testcases, regen)
+
+if __name__ == '__main__':
+    fire.Fire(main)
+    # model_name_or_path = 'Salesforce/codegen-350M-mono'
+    # # model_name_or_path = 'codellama/CodeLlama-13b-hf'
+    # gen_config = {
+    #     'temperature' : 0.8,
+    #     'max_new_tokens' : 128,
+    #     'do_sample' : True
+    # }
     
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1' # IDK why but u need this
+    # #os.environ["CUDA_VISIBLE_DEVICES"] = '1' # IDK why but u need this
     
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    # device = "cuda"
 
     # speaker = Speaker(
     #     model_name_or_path,
@@ -206,22 +260,23 @@ if __name__ == '__main__':
     #     device
     # )
 
-    speaker, listener = None, None
+    # # speaker, listener = None, None
 
-    num_generations = 100
-    program_prompt_template = "# Complete the following function.\n{}"
-    test_prompt_template = "# Write test cases for the following function.\n{}    pass\n\nassert"
+    # num_generations = 100
+    # program_prompt_template = "# Complete the following function.\n{}"
+    # test_prompt_template = "# Write test cases for the following function.\n{}    pass\n\nassert"
 
-    inference = InferenceSpeakerListener(speaker, listener, num_generations, program_prompt_template, test_prompt_template, extract_function, extract_testcase)
+    # inference = InferenceSpeakerListener(speaker, listener, num_generations, program_prompt_template, test_prompt_template, extract_function, extract_testcase)
 
-    train_json_dir = '/home/rrsood/CodeGen/test_training/humaneval_test_dataset.jsonl'
-    save_dir = '/home/rrsood/CodeGen/test_training/'
-    num_testcases = 5
-    cached_gen_programs_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl'
-    cached_gen_tests_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_tests_k100_temp0.8.jsonl'
-    cached_const_matrices_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/const-matrices/codellama_humaneval_const_matrix.npy'
+    # train_json_dir = '/home/rrsood/CodeGen/test_training/humaneval_test_dataset.jsonl'
+    # save_dir = '/home/rrsood/CodeGen/test_training/'
+    # num_testcases = 5
+    # regen = True
+    # # cached_gen_programs_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_programs_k100.jsonl'
+    # # cached_gen_tests_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/generations/codellama_humaneval_tests_k100_temp0.8.jsonl'
+    # # cached_const_matrices_dir = '/home/rrsood/CodeGen/data/humaneval/codellama-13b/const-matrices/codellama_humaneval_const_matrix.npy'
 
-    inference.create_informative_dataset(train_json_dir, save_dir, num_testcases, False, cached_gen_programs_dir, cached_gen_tests_dir, cached_const_matrices_dir)
+    # inference.create_informative_dataset(train_json_dir, save_dir, num_testcases, regen) # cached_gen_programs_dir, cached_gen_tests_dir, cached_const_matrices_dir)
 
 
     
