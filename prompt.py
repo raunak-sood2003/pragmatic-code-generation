@@ -70,20 +70,23 @@ class Solver:
             solutions.append(extract_code_blocks(response.choices[0].message.content)[0])
         return solutions
 
-    def generate_tests(self, prompt: str, n_samples: int) -> str:
-        prompt = self.TEST_PROMPT.format(prompt=prompt)
+    def generate_tests(self, prompt: str, solutions: list[str], n_samples: int) -> list[str]:
+        #prompt = self.TEST_PROMPT.format(prompt=prompt)
         test_suites = []
-        for _ in range(n_samples):
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1024,
-                temperature=1.0,
-                top_p=0.7,
-                top_k=50,
-                stop=["<|eot_id|>","<|eom_id|>"],
-            )
-            test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
+        for solution in solutions:
+            prompt = self.TEST_PROMPT_SOLUTION.format(prompt=prompt, solution=solution)
+            import pdb; pdb.set_trace()
+            for _ in range(n_samples):
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1024,
+                    temperature=1.0,
+                    top_p=0.7,
+                    top_k=50,
+                    stop=["<|eot_id|>","<|eom_id|>"],
+                )
+                test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
         return test_suites
 
     async def evaluate_solution(self, code: str, test_code: str):
@@ -133,11 +136,10 @@ class Solver:
     async def solve_problem(
         self, prompt: str, n_samples: int = 5
     ) -> List[Tuple[str, float]]:
-        # Generate test cases
-        test_code = self.generate_tests(prompt, n_samples)
-
         # Generate multiple solutions
         solutions = self.generate_solutions(prompt, n_samples)
+        # Generate test cases
+        test_code = self.generate_tests(prompt, solutions, n_samples)
 
         # Rerank solutions based on test performance
         # Rows are test suites
@@ -165,6 +167,23 @@ Each test case should get its own function and have a descriptive name.
 
 Do not repeat the original function.
 """
+    TEST_PROMPT_SOLUTION = """Write comprehensive test cases for the following function:
+```
+{solution}
+```
+
+Return only the test cases in Python code format, wrapped like
+```python
+def test_description1():
+    assert ...
+
+def test_description2():
+    assert ...
+```
+Each test case should get its own function and have a descriptive name.
+
+Do not repeat the original function.
+"""
     SOLUTION_PROMPT = """Write a Python implementation for the following function:
 
 {prompt}
@@ -178,6 +197,23 @@ code
 class MbppSolver(Solver):
     TEST_PROMPT = """Write comprehensive test cases for the following prompt:
 {prompt}
+
+Return only the test cases in Python code format, wrapped like
+```python
+def test_description1():
+    assert ...
+
+def test_description2():
+    assert ...
+```
+Each test case should get its own function and have a descriptive name.
+
+Do not repeat the original function.
+"""
+    TEST_PROMPT_SOLUTION = """Write comprehensive test cases for the following function:
+```
+{solution}
+```
 
 Return only the test cases in Python code format, wrapped like
 ```python
