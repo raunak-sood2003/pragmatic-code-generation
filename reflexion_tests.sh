@@ -1,5 +1,5 @@
-N_PROGRAMS=100 # Number of programs sampled from model
-N_TESTS=100 # Number of tests sampled from model
+N_PROGRAMS=10 # Number of programs sampled from model
+N_TESTS=10 # Number of tests sampled from model
 PROGRAMS_DIR="data/codellama_humaneval_programs_k100.jsonl"
 TESTS_DIR="data/codellama_humaneval_tests_k100_temp0.8.jsonl"
 CANONICAL_PROGRAMS_DIR="data/humaneval_canonical_solutions.jsonl"

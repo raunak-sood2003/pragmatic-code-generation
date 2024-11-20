@@ -13,13 +13,13 @@ async def evaluate_solution(session, semaphore, code: str, test_code: str):
     # Returns JSON report from pytest
     request_code = f"{code}\n{test_code}"
     async with semaphore:
-        async with session.post(eval_url, json={"codes": [request_code]}) as response:
-            try:
+        try:
+            async with session.post(eval_url, json={"codes": [request_code]}) as response:
                 result = await response.json()
                 return result[0]
-            except Exception as e:
-                print(f"Error evaluating solution: {e}")
-                return False
+        except Exception as e:
+            print(f"Error evaluating solution: {e}")
+            return False
 
 
 async def generate_const_matrix(num_programs, num_tests, programs_dir, tests_dir, canonical_programs_dir, save_dir):
