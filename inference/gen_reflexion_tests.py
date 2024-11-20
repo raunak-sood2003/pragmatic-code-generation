@@ -4,8 +4,8 @@ from tqdm import tqdm
 import random
 import os
 import fire
-from ..src.rsa import RSA
-from ..src.utils import create_const_matrix, write_jsonl
+from src.rsa import RSA
+from src.utils import create_const_matrix, write_jsonl
 
 def generate_pragmatic_testcases(gen_programs, gen_tests, const_matrix, num_testcases):
     # De-deuplicating programs and tests

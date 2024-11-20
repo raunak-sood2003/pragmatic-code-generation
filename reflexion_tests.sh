@@ -1,11 +1,12 @@
 N_PROGRAMS=100 # Number of programs sampled from model
 N_TESTS=100 # Number of tests sampled from model
-PROGRAMS_DIR="<path to repo>/pragmatic-code-generation/data/codellama_humaneval_programs_k100.jsonl"
-TESTS_DIR="<path to repo>/pragmatic-code-generation/data/codellama_humaneval_tests_k100_temp0.8.jsonl"
-CANONICAL_PROGRAMS_DIR="<path to repo>/pragmatic-code-generation/data/humaneval_canonical_solutions.jsonl"
-CONST_MATRIX_PATH="<where consistency matrix should be saved as .npy file>"
+PROGRAMS_DIR="data/codellama_humaneval_programs_k100.jsonl"
+TESTS_DIR="data/codellama_humaneval_tests_k100_temp0.8.jsonl"
+CANONICAL_PROGRAMS_DIR="data/humaneval_canonical_solutions.jsonl"
+CONST_MATRIX_PATH="const_matrix.npy"
 
-python3 -m pragmatic-code-generation.scripts.gen_consistency_matrix \
+echo "Creating consistency matrix"
+python -m inference.gen_consistency_matrix \
         --num_programs $N_PROGRAMS \
         --num_tests $N_TESTS \
         --programs_dir $PROGRAMS_DIR \
@@ -15,9 +16,10 @@ python3 -m pragmatic-code-generation.scripts.gen_consistency_matrix \
 
 
 N_OUT_TESTS=5 # Number of tests to output per problem
-SAVE_DIR="<folder where json file should be saved>"
+SAVE_DIR="output"
 
-python3 -m pragmatic-code-generation.inference.gen_reflexion_tests \
+echo "Running reflexion tests?"
+python -m inference.gen_reflexion_tests \
         --num_programs $N_PROGRAMS \
         --num_tests $N_TESTS \
         --num_out_tests $N_OUT_TESTS \
