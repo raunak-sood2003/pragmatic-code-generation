@@ -300,11 +300,13 @@ async def collect(dataset, example, solver):
             idx += 1
 
     np.save("pass_matrix.npy", pass_matrix)
-    with open("solutions.json", "w") as f:
+    with open("outputs/solutions.json", "w") as f:
         f.write(json.dumps(solutions))
-    with open("tests.json", "w") as f:
+    with open("outputs/tests.json", "w") as f:
         f.write(json.dumps(tests))
-    with open("reports.json", "w") as f:
+    with open("outputs/num_tests.json", "w") as f:
+        f.write(json.dumps(num_tests))
+    with open("outputs/reports.json", "w") as f:
         f.write(json.dumps(reports))
 
 
