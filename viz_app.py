@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import json
-import matplotlib.pyplot as plt
 import re
 
 def load_data():
@@ -28,15 +27,19 @@ def main():
     pass_matrix, solutions, tests, num_tests, reports = load_data()
     
     st.header("Pass Matrix Visualization")
-    fig, ax = plt.subplots(figsize=(20, 16))
-    im = ax.imshow(pass_matrix, cmap='binary', interpolation='nearest')
-    ax.grid(True, which='both', color='black', linewidth=1)
-    ax.set_xticks(np.arange(-.5, pass_matrix.shape[1], 1), minor=True)
-    ax.set_yticks(np.arange(-.5, pass_matrix.shape[0], 1), minor=True)
-    ax.set_xlabel('Test Index')
-    ax.set_ylabel('Solution Index')
-    ax.set_title('Pass/Fail Matrix')
-    st.pyplot(fig)
+    st.dataframe(
+        pass_matrix,
+        use_container_width=True,
+        height=600,
+        hide_index=False,
+        column_config={
+            str(i): st.column_config.NumberColumn(
+                f"Test {i}",
+                format="%.0f",
+            )
+            for i in range(pass_matrix.shape[1])
+        }
+    )
     
     st.header("Solutions and Tests")
     col1, col2 = st.columns(2)
