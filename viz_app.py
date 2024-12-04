@@ -22,6 +22,7 @@ def extract_test_functions(test_code):
     return [(m.group(1), m.group(2).strip()) for m in matches]
 
 def main():
+    st.set_page_config(layout="wide")
     st.title("Test Results Visualization")
     
     pass_matrix, solutions, tests, num_tests, reports = load_data()
