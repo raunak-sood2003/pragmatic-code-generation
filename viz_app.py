@@ -30,7 +30,6 @@ def main():
     st.dataframe(
         pass_matrix,
         use_container_width=True,
-        height=600,
         hide_index=False,
         column_config={
             str(i): st.column_config.NumberColumn(
