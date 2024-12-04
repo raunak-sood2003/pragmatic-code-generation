@@ -28,6 +28,7 @@ def main():
     pass_matrix, solutions, tests, num_tests, reports = load_data()
     
     st.header("Pass Matrix Visualization")
+    st.write("Number of tests per test suite:", num_tests)
     st.dataframe(
         pass_matrix,
         use_container_width=True,
