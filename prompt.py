@@ -276,8 +276,8 @@ async def collect(dataset, example, solver):
         true_code = example["code"]
 
     # should probably make these async as well
-    solutions = [true_code] + solver.generate_solutions(prompt, n_samples=5)
-    tests = [test_code] + solver.generate_tests(prompt, solutions, n_samples=5)
+    solutions = [true_code] + solver.generate_solutions(prompt, n_samples=10)
+    tests = [test_code] + solver.generate_tests(prompt, solutions, n_samples=1)
 
     reports = await asyncio.gather(*[
         solver.evaluate_solution(solution, test_suite)
