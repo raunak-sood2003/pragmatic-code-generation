@@ -1,7 +1,6 @@
 import os
-import together
+import openai
 import aiohttp
-import fire
 import json
 import asyncio
 from typing import List, Tuple, Dict
@@ -47,9 +46,15 @@ def convert_mbpp_tests(assert_list):
 
 class Solver:
     def __init__(self):
-        self.client = together.Together()
+        self.client = openai.OpenAI(
+            #api_key=os.environ.get("TOGETHER_API_KEY"),
+            #base_url="https://api.together.xyz/v1",
+        )
         #self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
-        self.model = "Qwen/Qwen2.5-7B-Instruct-Turbo"
+        #self.model = "Qwen/Qwen2.5-7B-Instruct-Turbo"
+        #self.model = "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
+        #self.model = "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+        self.model = "gpt-4o"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_solutions(self, prompt: str, n_samples: int) -> List[str]:
@@ -60,9 +65,9 @@ class Solver:
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=1024,
-                temperature=1.0,
+                temperature=0.8,
                 top_p=0.7,
-                top_k=50,
+                #top_k=50,
                 stop=["<|eot_id|>","<|eom_id|>"],
             )
             #print(response.choices[0].message.content)
@@ -75,15 +80,14 @@ class Solver:
         test_suites = []
         for solution in solutions:
             prompt = self.TEST_PROMPT_SOLUTION.format(prompt=prompt, solution=solution)
-            import pdb; pdb.set_trace()
             for _ in range(n_samples):
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=1024,
-                    temperature=1.0,
+                    temperature=0.8,
                     top_p=0.7,
-                    top_k=50,
+                    #top_k=50,
                     stop=["<|eot_id|>","<|eom_id|>"],
                 )
                 test_suites.append(extract_code_blocks(response.choices[0].message.content)[0])
@@ -238,22 +242,14 @@ code
 """
 
 
-async def main(dataset="openai_humaneval"):
-    assert dataset in ["openai_humaneval", "mbpp"]
+async def benchmark(dataset, example, solver):
     if dataset == "openai_humaneval":
-        # Load HumanEval dataset
-        dataset = load_dataset("openai_humaneval", split="test")
-        example = dataset[0]
         test_code = convert_humaneval_tests(example["test"], example["entry_point"])
-        solver = HumanEvalSolver()
         ranked_solutions = await solver.solve_problem(example["prompt"].rstrip())
     elif dataset == "mbpp":
-        dataset = load_dataset("mbpp", split="test")
-        example = dataset[0]
         test_code = convert_mbpp_tests(example["test_list"] + example["challenge_test_list"])
         prompt_tests = convert_mbpp_tests(example["test_list"])
         prompt = example["text"] + "\n" + prompt_tests
-        solver = MbppSolver()
         ranked_solutions = await solver.solve_problem(prompt)
 
     for solution, score in ranked_solutions:
@@ -261,11 +257,58 @@ async def main(dataset="openai_humaneval"):
         print("Solution:")
         print(solution)
 
-    report = solver.evaluate_solution(solution, test_code)
+    report = await solver.evaluate_solution(solution, test_code)
     passed = all(test["outcome"] == "passed" for test in report["tests"])
     print(passed)
     pdb.set_trace()
 
 
+async def collect(dataset, example, solver):
+    if dataset == "openai_humaneval":
+        test_code = convert_humaneval_tests(example["test"], example["entry_point"])
+        ranked_solutions = await solver.solve_problem(example["prompt"].rstrip())
+        raise NotImplementedError
+    elif dataset == "mbpp":
+        test_code = convert_mbpp_tests(example["test_list"] + example["challenge_test_list"])
+        prompt_tests = convert_mbpp_tests(example["test_list"])
+        prompt = example["text"] + "\n" + prompt_tests
+
+    solutions = await solver.generate_solutions(prompt, n_samples=5)
+    tests = await solver.generate_tests(prompt, solutions, n_samples=5)
+    reports = await asyncio.gather([
+        solver.evaluate_solution(solution, test_code)
+        for solution in solutions
+    ])
+    import pdb; pdb.set_trace()
+
+
+async def main(
+    dataset="mbpp",
+    mode="benchmark",
+):
+    # argcheck
+    assert dataset in ["openai_humaneval", "mbpp"]
+    assert mode in ["benchmark", "collect"]
+
+    example = None
+    solver = None
+    if dataset == "openai_humaneval":
+        # Load HumanEval dataset
+        examples = load_dataset("openai_humaneval", split="test")
+        example = examples[0]
+        solver = HumanEvalSolver()
+    elif dataset == "mbpp":
+        examples = load_dataset("mbpp", split="test")
+        example = examples[0]
+        solver = MbppSolver()
+
+    # can async map over all examples in future
+    if mode == "collect":
+        await collect(dataset, example, solver)
+    elif mode == "benchmark":
+        await benchmark(dataset, example, solver)
+
+
 if __name__ == "__main__":
-    fire.Fire(lambda *args, **kwargs: asyncio.run(main(*args, **kwargs)))
+    import strictfire
+    strictfire.StrictFire(lambda *args, **kwargs: asyncio.run(main(*args, **kwargs)))
