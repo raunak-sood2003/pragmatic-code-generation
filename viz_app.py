@@ -29,7 +29,10 @@ def main():
     
     st.header("Pass Matrix Visualization")
     fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(pass_matrix, cmap='RdYlGn', interpolation='nearest')
+    im = ax.imshow(pass_matrix, cmap='binary', interpolation='nearest')
+    ax.grid(True, which='both', color='black', linewidth=1)
+    ax.set_xticks(np.arange(-.5, pass_matrix.shape[1], 1), minor=True)
+    ax.set_yticks(np.arange(-.5, pass_matrix.shape[0], 1), minor=True)
     ax.set_xlabel('Test Index')
     ax.set_ylabel('Solution Index')
     ax.set_title('Pass/Fail Matrix')
