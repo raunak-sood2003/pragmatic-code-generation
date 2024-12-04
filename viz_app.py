@@ -44,7 +44,8 @@ def main():
         }
     )
 
-    st.write("Pass matrix:")
+    st.write("Pass matrix: (1 pass 0 fail)")
+    st.write("The first N belong to suite 1, and so on")
     st.dataframe(
         pass_matrix,
         use_container_width=True,
