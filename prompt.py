@@ -47,14 +47,14 @@ def convert_mbpp_tests(assert_list):
 class Solver:
     def __init__(self):
         self.client = openai.OpenAI(
-            #api_key=os.environ.get("TOGETHER_API_KEY"),
-            #base_url="https://api.together.xyz/v1",
+            api_key=os.environ.get("TOGETHER_API_KEY"),
+            base_url="https://api.together.xyz/v1",
         )
         #self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
-        #self.model = "Qwen/Qwen2.5-7B-Instruct-Turbo"
+        self.model = "Qwen/Qwen2.5-7B-Instruct-Turbo"
         #self.model = "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
         #self.model = "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
-        self.model = "gpt-4o"
+        #self.model = "gpt-4o"
         self.eval_url = "https://justinchiu--runtest-dev.modal.run"
 
     def generate_solutions(self, prompt: str, n_samples: int) -> List[str]:
@@ -245,13 +245,13 @@ code
 async def benchmark(dataset, example, solver):
     if dataset == "openai_humaneval":
         test_code = convert_humaneval_tests(example["test"], example["entry_point"])
-        ranked_solutions = await solver.solve_problem(example["prompt"].rstrip())
+        prompt = example["prompt"].rstrip()
     elif dataset == "mbpp":
         test_code = convert_mbpp_tests(example["test_list"] + example["challenge_test_list"])
         prompt_tests = convert_mbpp_tests(example["test_list"])
         prompt = example["text"] + "\n" + prompt_tests
-        ranked_solutions = await solver.solve_problem(prompt)
 
+    ranked_solutions = await solver.solve_problem(prompt)
     for solution, score in ranked_solutions:
         print(f"\nScore: {score}")
         print("Solution:")
@@ -266,20 +266,46 @@ async def benchmark(dataset, example, solver):
 async def collect(dataset, example, solver):
     if dataset == "openai_humaneval":
         test_code = convert_humaneval_tests(example["test"], example["entry_point"])
-        ranked_solutions = await solver.solve_problem(example["prompt"].rstrip())
+        prompt = example["prompt"].rstrip()
+        true_code = None
         raise NotImplementedError
     elif dataset == "mbpp":
         test_code = convert_mbpp_tests(example["test_list"] + example["challenge_test_list"])
         prompt_tests = convert_mbpp_tests(example["test_list"])
         prompt = example["text"] + "\n" + prompt_tests
+        true_code = example["code"]
 
-    solutions = await solver.generate_solutions(prompt, n_samples=5)
-    tests = await solver.generate_tests(prompt, solutions, n_samples=5)
-    reports = await asyncio.gather([
-        solver.evaluate_solution(solution, test_code)
+    # should probably make these async as well
+    solutions = [true_code] + solver.generate_solutions(prompt, n_samples=5)
+    tests = [test_code] + solver.generate_tests(prompt, solutions, n_samples=5)
+
+    reports = await asyncio.gather(*[
+        solver.evaluate_solution(solution, test_suite)
         for solution in solutions
+        for test_suite in tests
     ])
-    import pdb; pdb.set_trace()
+
+    num_tests = [len(re.findall("def.*:", test)) for test in tests]
+    pass_matrix = np.zeros((len(solutions), sum(num_tests)))
+
+    # populate pass matrix
+    idx = 0
+    for i, solution in enumerate(solutions):
+        for j, test in enumerate(tests):
+        # Discriminative test: pass on ground truth and fail on incorrect
+            report = reports[idx]
+            j_start = sum(num_tests[:j])
+            for t, test_result in enumerate(report["tests"]):
+                pass_matrix[i,j_start+t] = test_result["outcome"] == "passed"
+            idx += 1
+
+    np.save("pass_matrix.npy", pass_matrix)
+    with open("solutions.json", "w") as f:
+        f.write(json.dumps(solutions))
+    with open("tests.json", "w") as f:
+        f.write(json.dumps(tests))
+    with open("reports.json", "w") as f:
+        f.write(json.dumps(reports))
 
 
 async def main(
