@@ -46,7 +46,7 @@ def main():
     
     with col1:
         st.subheader("Solutions")
-        solution_idx = st.selectbox("Select Solution", range(len(solutions)), key="sol")
+        solution_idx = st.number_input("Select Solution", min_value=0, max_value=len(solutions)-1, value=0, step=1, key="sol")
         st.code(solutions[solution_idx], language="python")
         
     with col2:
@@ -55,7 +55,7 @@ def main():
         test_boundaries = np.cumsum([0] + num_tests)
         
         # Select test suite
-        test_suite_idx = st.selectbox("Select Test Suite", range(len(tests)), key="suite")
+        test_suite_idx = st.number_input("Select Test Suite", min_value=0, max_value=len(tests)-1, value=0, step=1, key="suite")
         
         # Show individual tests from the selected suite
         test_functions = extract_test_functions(tests[test_suite_idx])
