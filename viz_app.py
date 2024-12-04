@@ -28,7 +28,22 @@ def main():
     pass_matrix, solutions, tests, num_tests, reports = load_data()
     
     st.header("Pass Matrix Visualization")
-    st.write("Number of tests per test suite:", num_tests)
+    
+    # Display num_tests as a row vector
+    st.write("Number of tests per test suite:")
+    st.dataframe(
+        np.array([num_tests]),
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            str(i): st.column_config.NumberColumn(
+                f"Suite {i}",
+                format="%.0f",
+            )
+            for i in range(len(num_tests))
+        }
+    )
+    
     st.dataframe(
         pass_matrix,
         use_container_width=True,
