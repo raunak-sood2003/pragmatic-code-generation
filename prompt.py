@@ -316,7 +316,7 @@ async def main(
 ):
     # argcheck
     assert dataset in ["openai_humaneval", "mbpp"]
-    assert mode in ["benchmark", "collect"]
+    assert mode in ["benchmark", "collect", "viz"]
 
     example = None
     solver = None
@@ -335,6 +335,9 @@ async def main(
         await collect(dataset, example, solver)
     elif mode == "benchmark":
         await benchmark(dataset, example, solver)
+    elif mode == "viz":
+        import subprocess
+        subprocess.run(["streamlit", "run", "viz_app.py"])
 
 
 if __name__ == "__main__":
