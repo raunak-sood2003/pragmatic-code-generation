@@ -80,11 +80,11 @@ def main():
         st.write(f"Test Suite {test_suite_idx} (contains {len(test_functions)} tests)")
         
         for i, (name, body) in enumerate(test_functions):
-            with st.expander(f"Test {test_boundaries[test_suite_idx] + i}: {name}"):
-                st.code(body, language="python")
-                # Show pass/fail for selected solution
-                passed = pass_matrix[solution_idx, test_boundaries[test_suite_idx] + i]
-                st.write("Status:", "✅ Passed" if passed else "❌ Failed")
+            st.write(f"Test {test_boundaries[test_suite_idx] + i}: {name}")
+            st.code(body, language="python")
+            # Show pass/fail for selected solution
+            passed = pass_matrix[solution_idx, test_boundaries[test_suite_idx] + i]
+            st.write("Status:", "✅ Passed" if passed else "❌ Failed")
 
 if __name__ == "__main__":
     main()
