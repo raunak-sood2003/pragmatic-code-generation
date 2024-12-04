@@ -43,7 +43,8 @@ def main():
             for i in range(len(num_tests))
         }
     )
-    
+
+    st.write("Pass matrix:")
     st.dataframe(
         pass_matrix,
         use_container_width=True,

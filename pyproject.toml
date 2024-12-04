@@ -13,4 +13,6 @@ dependencies = [
     "openai",
     "aiohttp>=3.10.10",
     "strictfire>=0.4.1",
+    "streamlit>=1.40.2",
+    "matplotlib>=3.9.3",
 ]

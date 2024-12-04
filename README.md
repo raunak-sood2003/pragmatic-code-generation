@@ -14,3 +14,8 @@ Run the method on one (for now) humaneval/mbpp example with
 uv run python prompt.py --dataset=openai_humaneval
 uv run python prompt.py --dataset=mbpp
 ```
+
+## Unit test viz
+```
+uv run streamlit run viz_app.py
+```
