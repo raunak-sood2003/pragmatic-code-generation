@@ -30,7 +30,6 @@ def main():
     st.header("Pass Matrix Visualization")
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(pass_matrix, cmap='RdYlGn', interpolation='nearest')
-    plt.colorbar(im)
     ax.set_xlabel('Test Index')
     ax.set_ylabel('Solution Index')
     ax.set_title('Pass/Fail Matrix')
