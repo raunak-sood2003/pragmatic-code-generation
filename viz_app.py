@@ -28,7 +28,7 @@ def main():
     pass_matrix, solutions, tests, num_tests, reports = load_data()
     
     st.header("Pass Matrix Visualization")
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(20, 16))
     im = ax.imshow(pass_matrix, cmap='binary', interpolation='nearest')
     ax.grid(True, which='both', color='black', linewidth=1)
     ax.set_xticks(np.arange(-.5, pass_matrix.shape[1], 1), minor=True)
