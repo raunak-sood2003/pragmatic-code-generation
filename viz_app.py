@@ -17,8 +17,8 @@ def load_data():
 
 def extract_test_functions(test_code):
     """Extract individual test functions from a test suite"""
-    pattern = r"def\s+(test[^(]*)\([^)]*\):\s*\n\s*([^def]*)"
-    matches = re.finditer(pattern, test_code, re.MULTILINE)
+    pattern = r"def\s+(test[^(]*)\([^)]*\):\s*\n\s*(.*?)(?=\n\s*def|\Z)"
+    matches = re.finditer(pattern, test_code, re.MULTILINE | re.DOTALL)
     return [(m.group(1), m.group(2).strip()) for m in matches]
 
 def main():
